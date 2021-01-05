@@ -17,15 +17,19 @@ class BouncingMassPoints(RigidBody):
         seed_everything(0)
         ms = [0.6 + 0.8*np.random.rand() for _ in range(n_balls)] if m is None else n_balls*[m]
         ls = [0.06 + 0.08*np.random.rand() for _ in range(n_balls)] if l is None else n_balls*[l]
+        self.ms = torch.tensor(ms, dtype=torch.float64)
+        self.ls = torch.tensor(ls, dtype=torch.float64)
         for i in range(0, n_balls):
-            self.body_graph.add_extended_body(i, ms[i], d=2)
-        self.ms, self.ls, self.n, self.d, self.D, self.g = ms, ls, n_balls, 2, n_balls, g
+            self.body_graph.add_extended_body(i, ms[i], d=0)
+        self.g = g
+        self.n_o, self.n_p, self.d = n_balls, 1, 2
+        self.n = self.n_o * self.n_p
         self.bdry_lin_coef = torch.tensor([[1, 0, 0],
                                               [0, 1, 0],
                                               [-1, 0, 1],
-                                              [0, -1, 1]], dtype=torch.float32)
+                                              [0, -1, 1]], dtype=torch.float64)
         # mu
-        self.mus = mu * torch.ones(n_balls*(n_balls-1)//2 + n_balls*self.bdry_lin_coef.shape[0], dtype=torch.float32)
+        self.mus = mu * torch.ones(n_balls*(n_balls-1)//2 + n_balls*self.bdry_lin_coef.shape[0], dtype=torch.float64)
         self.cors = cor * torch.ones_like(self.mus)
 
 
@@ -101,6 +105,9 @@ class BouncingMassPointsAnimation(Animation):
     def __init__(self, qt, body):
         # at: T, n, d
         super().__init__(qt, body)
+        self.body = body
+        self.n_o = body.n_o
+        self.n_p = body.n_p
         # draw boundaries
 
         self.ax.set_xlim(-0.1, 1.1)

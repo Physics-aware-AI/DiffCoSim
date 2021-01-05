@@ -133,3 +133,5 @@ dmypy.json
 .vscode
 
 *.pt
+
+*.gif

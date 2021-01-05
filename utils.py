@@ -39,10 +39,11 @@ class Animation():
     
     def update(self, i=0):
         T, n, d = self.qt.shape
+        qt = self.qt.reshape(T, self.n_o, self.n_p, d)
         trail_len = 150
-        for j in range(n):
+        for j in range(self.n_o):
             # draw trails
-            xyz = self.qt[max(i-trail_len, 0): i+1, j, :]
+            xyz = qt[max(i-trail_len, 0): i+1, j, 0, :]
             self.objects["trails"][j].set_data(*xyz[...,:2].T)
             if d==3: self.objects["trails"][j].set_3d_properties(xyz[...,2].T)
             # draw points
