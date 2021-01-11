@@ -40,7 +40,7 @@ class CLNNwC(nn.Module):
         self.mu_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
         self.cor_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
 
-        self.impulse_solver = impulse_solver.to(device=device, dtype=dtype)
+        self.impulse_solver = impulse_solver
 
     @property
     def Minv(self):

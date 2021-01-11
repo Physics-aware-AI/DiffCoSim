@@ -1,11 +1,13 @@
 import torch
+import torch.nn as nn
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 
-class ImpulseSolver(object):
+class ImpulseSolver(nn.Module):
     def __init__(
-        self, dt, n_o, n_p, d, ls, bdry_lin_coef, check_collision, cld_2did_to_1did, DPhi, delta=None
+        self, dt, n_o, n_p, d, check_collision, cld_2did_to_1did, DPhi, ls, bdry_lin_coef, delta=None
     ):
+        super().__init__()
         assert delta is not None or n_p == 1
         self.dt = dt
         self.n_o = n_o
@@ -13,17 +15,14 @@ class ImpulseSolver(object):
         self.n = n_o * n_p
         self.d = d
         self.cld_2did_to_1did = cld_2did_to_1did
-        self.bdry_lin_coef = bdry_lin_coef
-        self.ls = ls
         self.check_collision = check_collision
         self.DPhi = DPhi
-        self.delta = delta
-
-    def to(self, device, dtype):
-        self.bdry_lin_coef = self.bdry_lin_coef.to(device=device, dtype=dtype)
-        self.ls = self.ls.to(device=device, dtype=dtype)
-        self.delta = self.delta.to(device=device, dtype=dtype) if self.delta is not None else None
-        return self
+        self.register_buffer("ls", ls)
+        self.register_buffer("bdry_lin_coef", bdry_lin_coef)
+        if delta is None:
+            self.delta = None
+        else:
+            self.register_buffer("delta", delta)
 
     def add_impulse(self, xv, mus, cors, Minv):
         bs = xv.shape[0]
@@ -36,10 +35,10 @@ class ImpulseSolver(object):
             return xv, is_cld
 
         # deal with collision individually. 
-        for bs_idx in torch.nonzero(is_cld).squeeze(1):
+        for bs_idx in torch.nonzero(is_cld, as_tuple=False).squeeze(1):
             # construct contact Jacobian
-            cld_ij_ids = torch.nonzero(is_cld_ij[bs_idx]) # n_cld_ij, 2
-            cld_bdry_ids = torch.nonzero(is_cld_bdry[bs_idx]) # n_cld_bdry, 2
+            cld_ij_ids = torch.nonzero(is_cld_ij[bs_idx], as_tuple=False) # n_cld_ij, 2
+            cld_bdry_ids = torch.nonzero(is_cld_bdry[bs_idx], as_tuple=False) # n_cld_bdry, 2
 
             n_cld_ij = len(cld_ij_ids) ; n_cld_bdry = len(cld_bdry_ids)
             n_cld = n_cld_ij + n_cld_bdry

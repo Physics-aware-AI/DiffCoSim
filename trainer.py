@@ -178,7 +178,6 @@ if __name__ == "__main__":
                                          callbacks=[checkpoint],
                                          logger=[tb_logger])
 
-    torch.autograd.set_detect_anomaly(True)
     trainer.fit(model)
 
     # with torch.no_grad():

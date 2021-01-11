@@ -73,7 +73,7 @@ class RigidBodyDataset(Dataset):
         chosen_zs = torch.zeros(n_trajs, chunk_len, *chunked_zs.shape[3:], dtype=zs.dtype, device=zs.device)
         is_cld_in_chosen = torch.zeros(n_trajs, dtype=torch.bool, device=zs.device)
         for i in range(n_trajs):
-            no_cld0_idx = torch.nonzero(is_clds_t0[:, i] == 0)[:, 0]
+            no_cld0_idx = torch.nonzero(is_clds_t0[:, i] == 0, as_tuple=False)[:, 0]
             rand_idx = torch.randint(0, len(no_cld0_idx), (1,), device=zs.device)[0]
             chosen_ts[i, :] = chunked_ts[no_cld0_idx[rand_idx], i]
             chosen_zs[i, :] = chunked_zs[no_cld0_idx[rand_idx], i]
