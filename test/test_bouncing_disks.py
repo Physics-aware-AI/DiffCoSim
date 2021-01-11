@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 plt.switch_backend("TkAgg")
 
 def test_disks():
-    body = BouncingDisks(n_disks=2, m=0.1, l=0.1, mu=0.1, cor=0.0)
+    body = BouncingDisks()
     dataset = RigidBodyDataset(body=body, n_traj=5, chunk_len=100, regen=True)
 
     ani = body.animate(dataset.zs, 1)

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 plt.switch_backend("TkAgg")
 
 def test_pendulum():
-    body = BouncingMassPoints(n_balls=1, m=0.1, l=0.1, mu=0.0, cor=0.0)
+    body = BouncingMassPoints()
     # initial condition 
     z0 = torch.zeros([1, 2, 1, 2], dtype=torch.float64)
     z0[0, 0, 0, 0] = 0.5 # x1

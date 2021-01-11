@@ -5,39 +5,59 @@ from .rigid_body import RigidBody, BodyGraph
 from utils import Animation
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
+from models.impulse import ImpulseSolver
 
 class BouncingDisks(RigidBody):
     dt = 0.01
     integration_time = 1.0
 
-    def __init__(self, n_disks=2, m=None, l=None, g=9.81, mu=0.1, cor=0.0):
-        assert n_disks >= 1
+    def __init__(
+        self,
+        kwargs_file_name="default_args",
+        n_o=1, 
+        g=9.81,
+        ms=[0.1], 
+        ls=[0.1], 
+        mus=[0.0, 0.0, 0.0, 0.0], 
+        cors=[0.0, 0.0, 0.0, 0.0],
+        bdry_lin_coef=[[1, 0, 0], [0, 1, 0], [-1, 0, 1], [0, -1, 1]],
+        dtype=torch.float64        
+    ):
+        assert n_o >= 1
         self.body_graph = BodyGraph()
-        self.arg_str = f"n{n_disks}m{m or 'r'}l{l or 'r'}"
-        seed_everything(0)
-        ms = [0.6 + 0.8*np.random.rand() for _ in range(n_disks)] if m is None else n_disks*[m]
-        ls = [0.06 + 0.08*np.random.rand() for _ in range(n_balls)] if l is None else n_disks*[l]
+        self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=torch.float64)
         self.ls = torch.tensor(ls, dtype=torch.float64)
-        for i in range(0, n_disks):
+        for i in range(0, n_o):
             self.body_graph.add_extended_body(i, self.ms[i], d=2,
                     moments= self.ls[i]**2 /4 * torch.ones(2, dtype=torch.float64))
         self.g = g
-        self.n_o, self.n_p, self.d = n_disks, 3, 2
+        self.n_o, self.n_p, self.d = n_o, 3, 2
         self.n = self.n_o * self.n_p
-        self.bdry_lin_coef = torch.tensor([[1, 0, 0],
-                                              [0, 1, 0],
-                                              [-1, 0, 1],
-                                              [0, -1, 1]], dtype=torch.float64)
-        # mu
-        self.mus = mu * torch.ones(n_disks*(n_disks-1)//2 + n_disks*self.bdry_lin_coef.shape[0], dtype=torch.float64)
-        self.cors = cor * torch.ones_like(self.mus)
-        self.delta = torch.tensor([[-1, 1, 0], [-1, 0, 1]], dtype=torch.float64) # 2, 3
+        self.bdry_lin_coef = torch.tensor(bdry_lin_coef, dtype=torch.float64)
+        self.n_c = n_o * (n_o - 1) // 2 + n_o * self.bdry_lin_coef.shape[0]
+        assert len(mus) == len(cors) == self.n_c
+        self.mus = torch.tensor(mus, dtype=torch.float64)
+        self.cors = torch.tensor(cors, dtype=torch.float64)
 
+        delta = torch.tensor([[-1, 1, 0], [-1, 0, 1]], dtype=torch.float64) # 2, 3
+
+        self.impulse_solver = ImpulseSolver(
+            dt = self.dt,
+            n_o = self.n_o,
+            n_p = self.n_p,
+            d = self.d,
+            ls = self.ls,
+            bdry_lin_coef = self.bdry_lin_coef,
+            check_collision = self.check_collision,
+            cld_2did_to_1did = self.cld_2did_to_1did,
+            DPhi = self.DPhi,
+            delta=delta
+        )
 
     def __str__(self):
-        return f"{self.__class__.__name__}{self.arg_str}"
-    
+        return f"{self.__class__.__name__}{self.kwargs_file_name}"
+
     def potential(self, x):
         # x: (bs, n, d)
         M = self.M.to(x.device, x.dtype)
@@ -97,9 +117,10 @@ class BouncingDisks(RigidBody):
         is_collide_ij = torch.zeros(bs, n_o, n_o, dtype=torch.bool, device=x.device)
         if n_o == 1:
             return is_collide, is_collide_ij, dist_ij
+        ls = self.ls.to(device=x.device, dtype=x.dtype)
         for i in range(n_o-1):
             for j in range(i+1, n_o):
-                dist_ij[:, i, j] = ((x_l[:, i] - x_l[:, j]) ** 2).sum(1).sqrt() - (self.ls[i] + self.ls[j])
+                dist_ij[:, i, j] = ((x_l[:, i] - x_l[:, j]) ** 2).sum(1).sqrt() - (ls[i] + ls[j])
                 is_collide_ij[:, i, j] =  dist_ij[:, i, j] < 0
         is_collide = is_collide_ij.sum([1, 2]) > 0
         return is_collide, is_collide_ij, dist_ij
@@ -108,14 +129,16 @@ class BouncingDisks(RigidBody):
         # x: (bs, n_o, 2) or (bs, n_o*n_p, 2)
         bs, n_o, n_p = x.shape[0], self.n_o, self.n_p
         x_l = x.reshape(bs, n_o, -1, 2)[..., 0, :]
-        coef = self.bdry_lin_coef / (self.bdry_lin_coef[:, 0:1] ** 2 + 
-                    self.bdry_lin_coef[:, 1:2] ** 2).sqrt() # n_bdry, 3
+        bdry_lin_coef = self.bdry_lin_coef.to(x.device, x.dtype)
+        ls = self.ls.to(x.device, x.dtype)
+        coef = bdry_lin_coef / (bdry_lin_coef[:, 0:1] ** 2 + 
+                    bdry_lin_coef[:, 1:2] ** 2).sqrt() # n_bdry, 3
         x_one = torch.cat(
             [x_l, torch.ones(*x_l.shape[:-1], 1, dtype=x.dtype, device=x.device)],
             dim=-1
         ).unsqueeze(-2) # bs, n_o, 1, 3
         dist = (x_one * coef).sum(-1) # bs, n_o, n_bdry
-        dist_bdry = dist - self.ls[..., None]
+        dist_bdry = dist - ls[..., None]
         is_collide_bdry = dist_bdry < 0 # bs, n_o, n_bdry
         is_collide = is_collide_bdry.sum([1, 2]) > 0
         return is_collide, is_collide_bdry, dist_bdry

@@ -10,7 +10,7 @@ class RigidBodyDataset(Dataset):
     def __init__(
         self, 
         root_dir=os.path.dirname(os.path.abspath(__file__)),
-        body=BouncingMassPoints(1),
+        body=BouncingMassPoints(),
         n_traj=100,
         mode="train", 
         dtype=torch.float32,
@@ -24,14 +24,16 @@ class RigidBodyDataset(Dataset):
             root_dir, f"traj_{body}_N{n_traj}_{mode}.pt"
         )
         if os.path.exists(filename) and not regen:
-            ts, zs = torch.load(filename)
+            ts, zs, is_clds = torch.load(filename)
         else:
-            ts, zs = self.generate_trajectory_data(n_traj)
+            print(f"generating trajectories (mode: {mode}), this might take a while...")
+            ts, zs, is_clds = self.generate_trajectory_data(n_traj)
             os.makedirs(root_dir, exist_ok=True)
-            torch.save((ts, zs), filename)
-        ts, zs = self.chunk_training_data(ts, zs, chunk_len)
+            torch.save((ts, zs, is_clds), filename)
+        ts, zs, is_clds = self.chunk_training_data(ts, zs, is_clds, chunk_len)
 
         self.ts, self.zs = ts.to(dtype=dtype), zs.to(dtype=dtype)
+        print(f"{is_clds.sum()} out of {len(is_clds)} trajectories contains collision.")
     
     def __len__(self):
         return self.zs.shape[0]
@@ -49,21 +51,31 @@ class RigidBodyDataset(Dataset):
         ts = torch.arange(
             0, self.body.integration_time, self.body.dt, device=z0s.device, dtype=z0s.dtype
         )
-        zs = self.body.integrate(z0s, ts)
+        zs, is_clds = self.body.integrate(z0s, ts)
         ts = ts.repeat(n_traj, 1)
-        return ts, zs
+        return ts, zs, is_clds
 
-    def chunk_training_data(self, ts, zs, chunk_len):
+    def chunk_training_data(self, ts, zs, is_clds, chunk_len):
         """ Randomly samples chunks of trajectory data, returns tensors shaped for training.
-        Inputs: [ts (batch_size, traj_len)] [zs (batch_size, traj_len, *z_dim)]
-        outputs: [chosen_ts (batch_size, chunk_len)] [chosen_zs (batch_size, chunk_len, *z_dim)]"""
+        Inputs: [ts (bs, traj_len)] [zs (bs, traj_len, *z_dim)] [is_clds (bs, traj_len)]
+        outputs: [chosen_ts (bs, chunk_len)] [chosen_zs (bs, chunk_len, *z_dim)]"""
         n_trajs, traj_len, *z_dim = zs.shape
         n_chunks = traj_len // chunk_len
         # Cut each trajectory into non-overlapping chunks
         chunked_ts = torch.stack(ts.chunk(n_chunks, dim=1))
         chunked_zs = torch.stack(zs.chunk(n_chunks, dim=1))
+        chunked_is_clds = torch.stack(is_clds.chunk(n_chunks, dim=1)) # n_chunks, bs, chunk_len
+        is_clds_t0 = chunked_is_clds[..., 0] # n_chunks, bs
+        is_cld = chunked_is_clds.sum(dim=-1) # n_chunks, bs
         # From each trajectory, we choose a single chunk randomly
-        chunk_idx = torch.randint(0, n_chunks, (n_trajs,), device=zs.device).long()
-        chosen_ts = chunked_ts[chunk_idx, range(n_trajs)]
-        chosen_zs = chunked_zs[chunk_idx, range(n_trajs)]
-        return chosen_ts, chosen_zs
+        # we make sure that the initial condition is not during collision
+        chosen_ts = torch.zeros(n_trajs, chunk_len, dtype=ts.dtype, device=ts.device)
+        chosen_zs = torch.zeros(n_trajs, chunk_len, *chunked_zs.shape[3:], dtype=zs.dtype, device=zs.device)
+        is_cld_in_chosen = torch.zeros(n_trajs, dtype=torch.bool, device=zs.device)
+        for i in range(n_trajs):
+            no_cld0_idx = torch.nonzero(is_clds_t0[:, i] == 0)[:, 0]
+            rand_idx = torch.randint(0, len(no_cld0_idx), (1,), device=zs.device)[0]
+            chosen_ts[i, :] = chunked_ts[no_cld0_idx[rand_idx], i]
+            chosen_zs[i, :] = chunked_zs[no_cld0_idx[rand_idx], i]
+            is_cld_in_chosen[i] = chunked_is_clds[no_cld0_idx[rand_idx], i].sum() > 0
+        return chosen_ts, chosen_zs, is_cld_in_chosen
