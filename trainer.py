@@ -2,7 +2,7 @@
 from argparse import ArgumentParser, Namespace
 import os, sys
 import json
-# THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 # PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # sys.path.append(PARENT_DIR)
 
@@ -42,11 +42,12 @@ class Model(pl.LightningModule):
         hparams = Namespace(**hparams) if type(hparams) is dict else hparams
         vars(hparams).update(**kwargs)
 
-        with open(os.path.join(".", "examples", hparams.body_kwargs_file+".json"), "r") as file:
+        with open(os.path.join(THIS_DIR, "examples", hparams.body_kwargs_file+".json"), "r") as file:
             body_kwargs = json.load(file)
 
-        body = str_to_class(hparams.body_class)(**body_kwargs)
+        body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, **body_kwargs)
         vars(hparams).update(dt=body.dt, integration_time=body.integration_time)
+        vars(hparams).update(**body_kwargs)
 
         # load/generate data
         train_dataset = str_to_class(hparams.dataset_class)(
@@ -125,6 +126,74 @@ class Model(pl.LightningModule):
         self.log("train/loss", loss, prog_bar=True)
         self.log("train/nfe", self.model.nfe, prog_bar=True)
         return loss
+
+    def test_step(self, batch, batch_idx):
+        (z0, _), _ = batch
+        ts = torch.arange(0.0, self.body.integration_time, self.hparams.dt).type_as(z0)
+        pred_zts = self.model.integrate(z0, ts, method='rk4')
+        true_zts, _ = self.body.integrate(z0, ts, method='rk4') # (bs, T, 2, n, d)
+
+        sq_diff = (pred_zts - true_zts).pow(2).sum((2,3,4))
+        sq_true = true_zts.pow(2).sum((2,3,4))
+        sq_pred = pred_zts.pow(2).sum((2,3,4))
+        # (bs, T)
+        rel_err = sq_diff.div(sq_true).sqrt()
+        bounded_rel_err = sq_diff.div(sq_true+sq_pred).sqrt()
+        abs_err = sq_diff.sqrt()
+
+        loss = self.traj_mae(pred_zts, true_zts)
+        pred_zts_true_energy = self.true_energy(pred_zts)
+        true_zts_true_energy = self.true_energy(true_zts)
+
+        return {
+            "traj_mae": loss.detach(),
+            "true_zts": true_zts.detach(),
+            "pred_zts": pred_zts.detach(),
+            "abs_err": abs_err.detach(),
+            "rel_err": rel_err.detach(),
+            "bounded_rel_err": bounded_rel_err.detach(),
+            "true_zts_true_energy": true_zts_true_energy.detach(),
+            "pred_zts_true_energy": pred_zts_true_energy.detach(),
+        }
+
+    def test_epoch_end(self, outputs):
+        log, save = self._collect_test_steps(outputs)
+        self.log("test_loss", log["traj_mae"])
+        for k, v in log.items():
+            self.log(f"test/{k}", v)
+
+    def _collect_test_steps(sef, outputs):
+        loss = collect_tensors("traj_mae", outputs).mean(0).item()
+        # collect batch errors from minibatches (BS, T)
+        abs_err = collect_tensors("abs_err", outputs)
+        rel_err = collect_tensors("rel_err", outputs)
+        bounded_rel_err = collect_tensors("bounded_rel_err", outputs)
+
+        pred_zts_true_energy = collect_tensors("pred_zts_true_energy", outputs) # (BS, T)
+        true_zts_true_energy = collect_tensors("true_zts_true_energy", outputs)
+
+        true_zts = collect_tensors("true_zts", outputs)
+        pred_zts = collect_tensors("pred_zts", outputs)
+
+        log = {
+            "traj_mae" : loss,
+            "mean_abs_err": abs_err.sum(1).mean(0),
+            "mean_rel_err": rel_err.sum(1).mean(0),
+            "mean_bounded_rel_err": bounded_rel_err.sum(1).mean(0),
+            "mean_true_zts_true_energy": true_zts_true_energy.sum(1).mean(0),
+            "mean_pred_zts_true_energy": pred_zts_true_energy.sum(1).mean(0),
+        }
+        save = {"true_zts": true_zts, "pred_zts": pred_zts}
+        return log, save
+
+    def true_energy(self, zts):
+        N, T = zts.shape[:2]
+        x, v = zts.chunk(2, dim=2)
+        p_x = self.body.M.type_as(v) @ v
+        zts = torch.cat([x, p_x], dim=2)
+        energy = self.body.hamiltonian(None, zts.reshape(N*T, -1))
+        return energy.reshape(N, T)
+
 
     @staticmethod
     def add_model_specific_args(parent_parser):

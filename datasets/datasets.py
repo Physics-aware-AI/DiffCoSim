@@ -15,7 +15,7 @@ class RigidBodyDataset(Dataset):
         mode="train", 
         dtype=torch.float32,
         chunk_len=5,
-        regen=False
+        regen=False,
     ):
         super().__init__()
         self.mode = mode

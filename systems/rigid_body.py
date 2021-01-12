@@ -85,31 +85,21 @@ class RigidBody(object):
     def potential(self, r):
         raise NotImplementedError
 
-    # def hamiltonian(self, t, z):
-    #     bs, D = z.shape
-    #     r = z[:, : D//2].reshape(bs, self.n, -1)
-    #     p = z[:, D//2 :].reshape(bs, self.n, -1)
-    #     T = EuclideanT(p, self.Minv)
-    #     V = self.potential(r)
-    #     return T + V
+    def hamiltonian(self, t, z):
+        bs, D = z.shape
+        x = z[:, : D//2].reshape(bs, self.n, -1)
+        p_x = z[:, D//2 :].reshape(bs, self.n, -1)
+        T = EuclideanT(p_x, self.Minv.type_as(z))
+        V = self.potential(x)
+        return T + V
 
     def dynamics(self):
         return ConstrainedLagrangianDynamics(self.potential, self.Minv_op, self.DPhi, (self.n, self.d))
 
-    # def integrate(self, z0, T, tol=1e-7, method="rk4"):
-    #     bs = z0.shape[0]
-    #     M = self.M.to(dtype=z0.dtype, device=z0.device)
-    #     Minv = self.Minv.to(dtype=z0.dtype, device=z0.device)
-    #     rp = torch.stack(
-    #         [z0[:,0], M @ z0[:, 1]], dim=1
-    #     ).reshape(bs, -1)
-    #     with torch.no_grad():
-    #         rpT = odeint(self.dynamics(), rp, T.to(dtype=z0.dtype, device=z0.device), rtol=tol, method=method)
-    #     rps = rpT.permute(1,0,2).reshape(bs, len(T), *z0.shape[1:])
-    #     rvs = torch.stack([rps[:,:,0], Minv @ rps[:,:,1]], dim=2)
-    #     return rvs
-
     def integrate(self, xv0, T, tol=1e-7, method="rk4"):
+        """
+        inputs: xv0 (bs, T, 2, n, d)
+        """
         bs = xv0.shape[0]
         mus = self.mus.to(xv0.device, xv0.dtype)
         cors = self.cors.to(xv0.device, xv0.dtype)

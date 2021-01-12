@@ -35,6 +35,7 @@ class ImpulseSolver(nn.Module):
             return xv, is_cld
 
         # deal with collision individually. 
+        new_v = 1 * v
         for bs_idx in torch.nonzero(is_cld, as_tuple=False).squeeze(1):
             # construct contact Jacobian
             cld_ij_ids = torch.nonzero(is_cld_ij[bs_idx], as_tuple=False) # n_cld_ij, 2
@@ -60,9 +61,10 @@ class ImpulseSolver(nn.Module):
             DPhi = self.DPhi(x[bs_idx:bs_idx+1], v[bs_idx:bs_idx+1]) # 
 
             if DPhi.shape[-1] != 0: # exist equality constraints
-                new_v = self.update_v_w_J_e(bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
+                dv = self.get_dv_w_J_e(bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
             else:                   # no equality constraints
-                new_v = self.update_v_wo_J_e(bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+                dv = self.get_dv_wo_J_e(bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+            new_v = new_v + dv
 
         return torch.stack([x, new_v], dim=1).reshape(bs, -1), is_cld
 
@@ -78,7 +80,7 @@ class ImpulseSolver(nn.Module):
         # p1_bdry = x[bs_idx, cld_bdry_ids[:, 0], 0] # n_cld_bdry, d
         a, b, c = self.bdry_lin_coef[cld_bdry_ids[:, 1]].unbind(dim=1) # n_cld_bdry, 3 -> n_cld_bdry,
         pc_bdry = torch.stack(
-            [ b*b*p1_bdry[:,0] - a*b*p1_bdry[:,1] -a*c, a*a*p1_bdry[:,1] - a*b*p1_bdry[:,0] + b*c],
+            [ b*b*p1_bdry[:,0] - a*b*p1_bdry[:,1] -a*c, a*a*p1_bdry[:,1] - a*b*p1_bdry[:,0] - b*c],
             dim=1,
         ) / (a*a + b*b).unsqueeze(dim=1)
 
@@ -137,7 +139,7 @@ class ImpulseSolver(nn.Module):
         ], dim=-1)
         return c_tilde
 
-    def update_v_w_J_e(self, bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi):
+    def get_dv_w_J_e(self, bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi):
         n_cld, d, n_o, n_p, _ = Jac.shape
         n = n_o*n_p
         C = DPhi.shape[-1]
@@ -158,23 +160,28 @@ class ImpulseSolver(nn.Module):
         V_s_T_L_T_Jac_T = L_V_s.t() @ Jac.reshape(n_cld*d, n*d).t() # (n*d-C, n_cld*d)
         A_decom = V_s_T_L_T_Jac_T
         # compression phase impulse
-        impulse, impulse_star = self.solve_impulse(A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None)
+        impulse, impulse_star = self.solve_impulse(
+            A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
+        )
         # velocity after compression phase (before retitution phase)
         M_hat_inv = L_V_s @ L_V_s.t() #(n*d, n*d)
         M_hat_inv_Jac_T = M_hat_inv @ Jac.reshape(n_cld*d, n*d).t() # (n*d, n_cld*d)
-        dv_comp = (M_hat_inv_Jac_T @ impulse_star).reshape(n, d)
+        dv_comp = (M_hat_inv_Jac_T @ impulse).reshape(n, d)
+        # dv_comp_star = (M_hat_inv_Jac_T @ impulse_star).reshape(n, d)
         v_prev_r = v[bs_idx] + dv_comp
         # restitution phase impulse
         Jac_v_prev_r = Jac.reshape(n_cld*d, n*d) @ v_prev_r.reshape(n*d, 1) # n_cld*d, 1
         target_impulse = (cor.reshape(-1) * impulse.reshape(n_cld, d)[:, 0]).reshape(n_cld, 1)
-        impulse_r, impulse_star_r = self.solve_impulse(A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse)
-        # velocity after restitution phase
-        dv_rest = (M_hat_inv_Jac_T @ impulse_r).reshape(n, d)
+        impulse_r, impulse_star_r = self.solve_impulse(
+            A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse
+        )
+        # velocity after restitution phase, compensate penetration
+        dv_rest = (M_hat_inv_Jac_T @ impulse_star_r).reshape(n, d)
         dv = torch.zeros_like(v)
         dv[bs_idx] = dv_comp + dv_rest
-        return v + dv
+        return dv
 
-    def update_v_wo_J_e(self, bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor):
+    def get_dv_wo_J_e(self, bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor):
         n_cld, d, n_o, n_p, _ = Jac.shape
         n = n_o * n_p
         # calculate A_decom
@@ -182,20 +189,24 @@ class ImpulseSolver(nn.Module):
         Minv_sqrt_Jac_T = (Minv_sqrt @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
         A_decom = Minv_sqrt_Jac_T
         # compression phase impulse
-        impulse, impulse_star = self.solve_impulse(A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None)
+        impulse, impulse_star = self.solve_impulse(
+            A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
+        )
         # velocity after compression phase (before retitution phase)
         Minv_Jac_T = (Minv @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
-        dv_comp = (Minv_Jac_T @ impulse_star).reshape(n, d)
+        dv_comp = (Minv_Jac_T @ impulse).reshape(n, d)
         v_prev_r = v[bs_idx] + dv_comp
         # restitution phase impulse
         Jac_v_prev_r = Jac.reshape(n_cld*d, n*d) @ v_prev_r.reshape(n*d, 1) # n_cld*d, 1
         target_impulse = (cor.reshape(-1) * impulse.reshape(n_cld, d)[:, 0]).reshape(n_cld, 1)
-        impulse_r, impulse_star_r = self.solve_impulse(A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse)
+        impulse_r, impulse_star_r = self.solve_impulse(
+            A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse
+        )
         # velocity after restitution phase
-        dv_rest = (Minv_Jac_T @ impulse_r).reshape(n, d)
+        dv_rest = (Minv_Jac_T @ impulse_star_r).reshape(n, d)
         dv = torch.zeros_like(v)
         dv[bs_idx] = dv_comp + dv_rest
-        return v + dv
+        return dv
 
     def solve_impulse(self, A_decom, v_, v_star, mu, n_cld, d, target_impulse):
         """
