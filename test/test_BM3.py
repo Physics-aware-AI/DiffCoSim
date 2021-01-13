@@ -18,28 +18,6 @@ seed_everything(0)
 import matplotlib.pyplot as plt
 plt.switch_backend("TkAgg")
 
-# def test_BM3():
-#     checkpoint_path = os.path.join(
-#         PARENT_DIR,
-#         "logs",
-#         "BM3_homo_cor1_mu0_N800",
-#         "version_0",
-#         "epoch=753.ckpt"
-#     ) 
-#     model = Model.load_from_checkpoint(checkpoint_path)
-#     full_train_dataset = RigidBodyDataset(
-#         mode = "train",
-#         n_traj = 800,
-#         body = model.body,
-#         dtype = torch.float32,
-#         chunk_len = 100,
-#     )
-
-#     ani = model.body.animate(full_train_dataset.zs, 4)
-#     ani.save(os.path.join(THIS_DIR, 'test_BM3.gif'))
-
-#     assert 1
-
 def test_BM3_0():
     body_kwargs_file = "BM3_homo_cor1_mu0"
     with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
@@ -79,4 +57,4 @@ def test_BM3_1():
     assert 1
 
 if __name__ == "__main__":
-    test_BM3_1()
+    test_BM3_0()

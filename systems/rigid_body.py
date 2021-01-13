@@ -98,7 +98,7 @@ class RigidBody(object):
 
     def integrate(self, xv0, T, tol=1e-7, method="rk4"):
         """
-        inputs: xv0 (bs, T, 2, n, d)
+        inputs: xv0 (bs, 2, n, d)
         """
         bs = xv0.shape[0]
         mus = self.mus.to(xv0.device, xv0.dtype)

@@ -29,7 +29,7 @@ def test_BM1_0():
         body = body,
         dtype = torch.float32,
         chunk_len = 100,
-        regen=False
+        regen=True
     )
 
     ani = body.animate(dataset.zs, 1)
@@ -76,4 +76,4 @@ def test_BM1_2():
     assert 1
 
 if __name__ == "__main__":
-    test_BM1_2()
+    test_BM1_1()
