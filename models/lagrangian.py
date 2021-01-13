@@ -37,7 +37,7 @@ class CLNNwC(nn.Module):
         assert len(self.m_params) == 1 # limited support for now
         self.n_p = int(list(self.m_params.keys())[0]) + 1
         self.n_o = self.n // self.n_p
-        self.mu_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
+        self.mu_params = nn.Parameter(torch.rand(n_c, dtype=dtype))
         self.cor_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
 
         self.impulse_solver = impulse_solver
@@ -110,8 +110,8 @@ class CLNNwC(nn.Module):
         assert (z0.ndim == 4) and (ts.ndim == 1)
         assert (z0.shape[-1] == self.d) and z0.shape[-2] == self.n
         bs = z0.shape[0]
-        mus = F.softplus(self.mu_params)
-        cors = torch.sigmoid(self.cor_params)
+        mus = F.relu(self.mu_params)
+        cors = F.hardsigmoid(self.cor_params)
         ts = ts.to(z0.device, z0.dtype)
         zt = z0.reshape(bs, -1)
         zT = torch.zeros([bs, len(ts), zt.shape[1]], device=z0.device, dtype=z0.dtype)
