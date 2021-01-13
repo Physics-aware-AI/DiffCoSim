@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import torch
 import os
+from pytorch_lightning import seed_everything
 
 from systems.bouncing_mass_points import BouncingMassPoints
 def rel_err(x, y):
@@ -27,9 +28,11 @@ class RigidBodyDataset(Dataset):
             ts, zs, is_clds = torch.load(filename)
         else:
             print(f"generating trajectories (mode: {mode}), this might take a while...")
+            seed_everything(0)
             ts, zs, is_clds = self.generate_trajectory_data(n_traj)
             os.makedirs(root_dir, exist_ok=True)
             torch.save((ts, zs, is_clds), filename)
+        seed_everything(0)
         ts, zs, is_clds = self.chunk_training_data(ts, zs, is_clds, chunk_len)
 
         self.ts, self.zs = ts.to(dtype=dtype), zs.to(dtype=dtype)
