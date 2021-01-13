@@ -6,38 +6,64 @@ import torch
 import networkx as nx
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
+from 
 
-class ChainPendulum_w_Wall(RigidBody):
+class ChainPendulum_w_Contact(RigidBody):
     dt = 0.01
     integration_time = 1.0
 
-    def __init__(self, n_links=2, m=None, l=None, radius=0.1, mu=0.1, cor=0.0, lb=1, rb=1):
+    def __init__(
+        self, 
+        kwargs_file_name="default"
+        n_o=2, 
+        g=9.81,
+        ms=[0.1, 0.1], 
+        ls=[0.7, 0.7], 
+        radii=[0.1, 0.1], 
+        mus=[0.0, 0.0, 0.0, 0.0], 
+        cor=[1.0, 1.0, 1.0, 1.0], 
+        bdry_lin_coef=[[1, 0, 1], [-1, 0, 1]],
+        dtype=torch.float64
+    ):
+        assert n_o = len(ms) == len(ls) == len(radii)
         self.body_graph = BodyGraph()
-        self.arg_str = f"n{n_links}m{m or 'r'}l{l or 'r'}"
-        seed_everything(0)
-        ms = [0.6 + 0.8*np.random.rand() for _ in range(n_links)] if m is None else n_links*[m]
-        ls = [0.6 + 0.8*np.random.rand() for _ in range(n_links)] if l is None else n_links*[l]
+        self.kwargs_file_name = kwargs_file_name
+        self.ms = torch.tensor(ms, dtype=dtype)
+        self.ls = torch.tensor(ls, dtype=dtype),
+        self.radii = torch.tensor(radii, dtype=dtype)
         self.body_graph.add_extended_body(0, ms[0], d=0, tether=(torch.zeros(2), ls[0]))
-        for i in range(1, n_links):
+        for i in range(1, n_o):
             self.body_graph.add_extended_body(i, ms[i], d=0)
             self.body_graph.add_edge(i-1, i, l=ls[i])
-        self.ms, self.n, self.d, self.D = ms, n_links, 2, n_links
-        self.angular_dims = range(n_links)
+        self.g = g
+        self.n_o, self.n_p, self.d = n_o, 1, 2
+        self.n = self.n_o * self.n_p
 
-        self.bdry_lin_coef = torch.tensor([[1, 0, lb],
-                                              [-1, 0, rb]], dtype=torch.float32)
-        self.radius = radius
-        self.mus = mu * torch.ones(n_links*self.bdry_lin_coef.shape[0], dtype=torch.float32)
-        self.cors = cor * torch.ones_like(self.mus)
-        self.lb, self.rb = lb, rb
+        self.bdry_lin_coef = torch.tensor(bdry_lin_coef, dtype=dtype)
+        self.n_c = n_o * self.bdry_lin_coef.shape[0]
+        assert len(mus) == len(cors) == self.n_c
+        self.mus = torch.tensor(mus, dtype=dtype)
+        self.cors = torch.tensor(cors, dtype=dtype)
+
+        self.impulse_solver = ImpulseSolver(
+            dt = self.dt,
+            n_o = self.n_o,
+            n_p = self.n_p,
+            d = self.d,
+            ls = self.ls,
+            bdry_lin_coef = self.bdry_lin_coef,
+            check_collision = self.check_collision,
+            cld_2did_to_1did = self.cld_2did_to_1did,
+            DPhi = self.DPhi
+        )        
 
 
     def __str__(self):
-        return f"{self.__class__.__name__}{self.arg_str}"
+        return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
-    def potential(self, r):
-        M = self.M.to(dtype=r.dtype)
-        return 9.81 * (M @ r)[..., 1].sum(1) 
+    def potential(self, x):
+        M = self.M.to(dtype=x.dtype)
+        return self.g * (M @ x)[..., 1].sum(1) 
 
     def sample_initial_conditions(self, N, dtype=torch.float64):
         n = len(self.body_graph.nodes)
@@ -68,7 +94,7 @@ class ChainPendulum_w_Wall(RigidBody):
             dim=-1
         ).unsqueeze(-2) # bs, n, 1, 3
         dist = (x_one * coef).sum(-1) # bs, n, n_bdry
-        dist_bdry = dist - self.radius
+        dist_bdry = dist - self.radii[:, None]
         is_collide_bdry = dist_bdry < 0 # bs, n, n_bdry
         is_collide = is_collide_bdry.sum([1, 2]) > 0
         return is_collide, is_collide_bdry, dist_bdry
@@ -152,12 +178,12 @@ class Pendulum_w_Wall_Animation(Animation):
         # self.body = body
         self.G = body.body_graph
         empty = self.qt.shape[-1] * [[]]
-        n_links = len(nx.get_node_attributes(self.G, "tether")) + len(self.G.edges)
-        self.objects["links"] = sum([self.ax.plot(*empty, "-", color='k') for _ in range(n_links)], [])
+        n_o = len(nx.get_node_attributes(self.G, "tether")) + len(self.G.edges)
+        self.objects["links"] = sum([self.ax.plot(*empty, "-", color='k') for _ in range(n_o)], [])
         self.objects["pts"] = sum(
             [self.ax.plot(*empty, "o", ms=10*body.ms[i], c=self.colors[i]) for i in range(qt.shape[1])], []
         )
-        self.circles = [Circle(empty, body.radius, color=self.colors[i]) for i in range(qt.shape[1])] + []
+        self.circles = [Circle(empty, body.radii[i], color=self.colors[i]) for i in range(qt.shape[1])] + []
 
         [self.ax.add_artist(circle) for circle in self.circles]
 
