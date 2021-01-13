@@ -1,11 +1,20 @@
+import fsspec, os
 import torch
 import torch.nn as nn
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
+from diffcp.cone_program import SolverError
+
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 class ImpulseSolver(nn.Module):
     def __init__(
-        self, dt, n_o, n_p, d, check_collision, cld_2did_to_1did, DPhi, ls, bdry_lin_coef, delta=None
+        self, dt, n_o, n_p, d, 
+        check_collision, cld_2did_to_1did, DPhi, 
+        ls, bdry_lin_coef, delta=None,
+        save_dir=os.path.join(PARENT_DIR, "tensors")
     ):
         super().__init__()
         assert delta is not None or n_p == 1
@@ -23,6 +32,7 @@ class ImpulseSolver(nn.Module):
             self.delta = None
         else:
             self.register_buffer("delta", delta)
+        self.save_dir = save_dir
 
     def add_impulse(self, xv, mus, cors, Minv):
         bs = xv.shape[0]
@@ -190,10 +200,14 @@ class ImpulseSolver(nn.Module):
         A_decom = Minv_sqrt_Jac_T
         # make sure v_star is "valid", avoid unbounded cvx problem
         v_star = Jac.reshape(n_cld*d, n*d) @ (Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1))
-        # compression phase impulse
-        impulse = self.solve_impulse(
-            A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
-        )
+        try:
+            # compression phase impulse
+            impulse = self.solve_impulse(
+                A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
+            )
+        except SolverError as e:
+            self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+            impulse = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after compression phase (before retitution phase)
         Minv_Jac_T = (Minv @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
         dv_comp = (Minv_Jac_T @ impulse).reshape(n, d)
@@ -201,9 +215,13 @@ class ImpulseSolver(nn.Module):
         # restitution phase impulse
         Jac_v_prev_r = Jac.reshape(n_cld*d, n*d) @ v_prev_r.reshape(n*d, 1) # n_cld*d, 1
         target_impulse = (cor.reshape(-1) * impulse.reshape(n_cld, d)[:, 0]).reshape(n_cld, 1)
-        impulse_star_r = self.solve_impulse(
-            A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse
-        )
+        try:
+            impulse_star_r = self.solve_impulse(
+                A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse
+            )
+        except SolverError as e:
+            self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+            impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after restitution phase
         dv_rest = (Minv_Jac_T @ impulse_star_r).reshape(n, d)
         dv = torch.zeros_like(v)
@@ -248,3 +266,30 @@ class ImpulseSolver(nn.Module):
             target_impulse.reshape(-1, 1)
         )
         return impulse_star
+
+    def save(self, error, mode, *args):
+        version = f"tensors_{self._get_next_version()}"
+        dir0 = os.path.join(self.save_dir, version)
+        os.makedirs(dir0, exist_ok=True)
+        filepath = os.path.join(dir0, f"{mode}.pt")
+        torch.save(args, filepath)
+        print(error)
+        print(f"save tensors at {filepath}")
+        
+    def _get_next_version(self):
+        root_dir = self.save_dir
+        fs = fsspec.filesystem("file")
+
+        if not fs.isdir(root_dir):
+            return 0
+        existing_versions = []
+        for listing in fs.listdir(root_dir):
+            d = listing["name"]
+            bn = os.path.basename(d)
+            if fs.isdir(d) and bn.startswith("tensors_"):
+                dir_ver = bn.split("_")[1].replace('/', '')
+                existing_versions.append(int(dir_ver))
+        if len(existing_versions) == 0:
+            return 0
+
+        return max(existing_versions) + 1

@@ -7,13 +7,14 @@ from datasets.datasets import RigidBodyDataset
 from systems.bouncing_mass_points import BouncingMassPoints
 from systems.chain_pendulum_with_wall import ChainPendulum_w_Wall
 from pytorch_lightning import seed_everything
+from models.impulse import ImpulseSolver
 
 import torch
 
 seed_everything(0)
 
 import matplotlib.pyplot as plt
-plt.switch_backend("TkAgg")
+plt.switch_backend("Agg")
 
 def test_BM():
     body = BouncingMassPoints()
@@ -48,5 +49,16 @@ def test_corner():
     ani = body.animate(zs, 0)
     ani.save(os.path.join(THIS_DIR, "test_corner.gif"))
 
+def test_load_saved_tensor():
+    body = BouncingMassPoints(
+        ms=[1/0.9564],
+        mus=[1.6585, 0.7067, 0.8111, 0.6014],
+        cors=[0.6449, 0.6264, 0.2586, 0.4543],
+    )
+    tensors = torch.load(os.path.join(PARENT_DIR, "test", "tensors_0", "rest.pt"))
+    if len(tensors) == 8:
+        bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor = tensors
+        body.impulse_solver.get_dv_wo_J_e(*tensors)
+
 if __name__ == "__main__":
-    test_corner()
+    test_load_saved_tensor()
