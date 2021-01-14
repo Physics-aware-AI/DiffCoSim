@@ -72,6 +72,33 @@ def test_teststep_BM1():
 
     assert 1
 
+def test_teststep_CP2():
+    checkpoint_path = os.path.join(
+        PARENT_DIR,
+        "logs",
+        "BM1_homo_cor1_mu0_N800",
+        "version_0",
+        "epoch=848.ckpt"
+    ) 
+    model = Model.load_from_checkpoint(checkpoint_path)
+    # model.model.cor_params = nn.Parameter(torch.tensor([0.0, 0.0, 0.0, 0.0], dtype=torch.float32))
+    model.hparams.batch_size = 2
+    dataloader = model.test_dataloader()
+    test_batch = next(iter(dataloader))
+    log = model.test_step(test_batch, 0)
+    true_zts_true_energy = log["true_zts_true_energy"].numpy()
+    pred_zts_true_energy = log["pred_zts_true_energy"].numpy()
+    # plt.plot(true_zts_true_energy[0])
+    # plt.plot(pred_zts_true_energy[0])
+    # plt.show()
+
+    ani = model.body.animate(log["true_zts"], 0)
+    ani.save(os.path.join(THIS_DIR, 'test_teststep_BM1_true_zts.gif'))
+
+    ani = model.body.animate(log["pred_zts"], 0)
+    ani.save(os.path.join(THIS_DIR, "test_teststep_BM1_pred_zts.gif"))
+
+    assert 1
 
 if __name__ == "__main__":
     test_teststep_BM1()

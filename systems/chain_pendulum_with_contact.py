@@ -6,7 +6,7 @@ import torch
 import networkx as nx
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
-from 
+from models.impulse import ImpulseSolver
 
 class ChainPendulum_w_Contact(RigidBody):
     dt = 0.01
@@ -14,22 +14,22 @@ class ChainPendulum_w_Contact(RigidBody):
 
     def __init__(
         self, 
-        kwargs_file_name="default"
+        kwargs_file_name="default",
         n_o=2, 
         g=9.81,
         ms=[0.1, 0.1], 
         ls=[0.7, 0.7], 
         radii=[0.1, 0.1], 
         mus=[0.0, 0.0, 0.0, 0.0], 
-        cor=[1.0, 1.0, 1.0, 1.0], 
+        cors=[1.0, 1.0, 1.0, 1.0], 
         bdry_lin_coef=[[1, 0, 1], [-1, 0, 1]],
         dtype=torch.float64
     ):
-        assert n_o = len(ms) == len(ls) == len(radii)
+        assert n_o == len(ms) == len(ls) == len(radii)
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=dtype)
-        self.ls = torch.tensor(ls, dtype=dtype),
+        self.ls = torch.tensor(ls, dtype=dtype)
         self.radii = torch.tensor(radii, dtype=dtype)
         self.body_graph.add_extended_body(0, ms[0], d=0, tether=(torch.zeros(2), ls[0]))
         for i in range(1, n_o):
@@ -166,15 +166,20 @@ class Pendulum_w_Wall_Animation(Animation):
     def __init__(self, qt, body):
         # qt: T, n, d
         super().__init__(qt, body)
+        self.body = body
+        self.n_o = body.n_o
+        self.n_p = body.n_p
 
-        x_min, x_max = self.ax.get_xlim()
-        y_min, y_max = self.ax.get_ylim()
-        x_min = x_min if x_min < -body.lb-0.1 else -body.lb-0.1
-        x_max = x_max if x_max > body.rb+0.1 else body.rb+0.1
+        # x_min, x_max = self.ax.get_xlim()
+        # y_min, y_max = self.ax.get_ylim()
+        # x_min = x_min if x_min < -body.lb-0.1 else -body.lb-0.1
+        # x_max = x_max if x_max > body.rb+0.1 else body.rb+0.1
+        # self.ax.set_xlim(x_min, x_max)
+
+        x_min, y_min, x_max, y_max = -1.1, -1.1, 1.1, 1.1
         self.ax.set_xlim(x_min, x_max)
+        self.ax.set_ylim(y_min, y_max)
 
-        # self.ax.set_xlim()
-        # self.ax.set_ylim()
         # self.body = body
         self.G = body.body_graph
         empty = self.qt.shape[-1] * [[]]
@@ -187,7 +192,11 @@ class Pendulum_w_Wall_Animation(Animation):
 
         [self.ax.add_artist(circle) for circle in self.circles]
 
-        lines = [[(-body.lb, y_min), (-body.lb, y_max)], [(body.rb, y_min), (body.rb, y_max)]]
+        if body.bdry_lin_coef.shape[0] == 1:
+            lines = [[(x_min, -1), (x_max, -1)]]
+        else:
+            lines = [[(-1, y_min), (-1, y_max)], [(1, y_min), (1, y_max)]]
+        # lines = [[(-body.lb, y_min), (-body.lb, y_max)], [(body.rb, y_min), (body.rb, y_max)]]
         lc = mc.LineCollection(lines, linewidths=2)
         self.ax.add_collection(lc)
 

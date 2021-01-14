@@ -170,10 +170,20 @@ class ImpulseSolver(nn.Module):
         L_V_s = (L @ V[:, :n*d-C].reshape(n, d*(n*d-C))).reshape(n*d, n*d-C) # (n*d, n*d-C)
         V_s_T_L_T_Jac_T = L_V_s.t() @ Jac.reshape(n_cld*d, n*d).t() # (n*d-C, n_cld*d)
         A_decom = V_s_T_L_T_Jac_T
+        # make sure v_star is "valid", avoid unbounded cvx problem
+        # (J J_T - J J_e_T (J_e J_e_T)^-1 J_e J_T) * v_star
+        Jac_T_v_star = Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1) # (n*d, 1)
+        J_e_Jac_T_v_star = J_e @ Jac_T_v_star # (C, 1)
+        v_right = J_e_T @ torch.solve(J_e_Jac_T_v_star, J_e @ J_e_T)[0] # (n*d, 1)
+        v_star = Jac @ (Jac_T_v_star - v_right) # (n_cld*d, 1)
         # compression phase impulse
-        impulse = self.solve_impulse(
-            A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
-        )
+        try:
+            impulse = self.solve_impulse(
+                A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
+            )
+        except SolverError as e:
+            self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
+            impulse = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after compression phase (before retitution phase)
         M_hat_inv = L_V_s @ L_V_s.t() #(n*d, n*d)
         M_hat_inv_Jac_T = M_hat_inv @ Jac.reshape(n_cld*d, n*d).t() # (n*d, n_cld*d)
@@ -182,9 +192,13 @@ class ImpulseSolver(nn.Module):
         # restitution phase impulse
         Jac_v_prev_r = Jac.reshape(n_cld*d, n*d) @ v_prev_r.reshape(n*d, 1) # n_cld*d, 1
         target_impulse = (cor.reshape(-1) * impulse.reshape(n_cld, d)[:, 0]).reshape(n_cld, 1)
-        impulse_star_r = self.solve_impulse(
-            A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse
-        )
+        try:
+            impulse_star_r = self.solve_impulse(
+                A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse
+            )
+        except SolverError as e:
+            self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+            impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after restitution phase, compensate penetration
         dv_rest = (M_hat_inv_Jac_T @ impulse_star_r).reshape(n, d)
         dv = torch.zeros_like(v)
@@ -199,9 +213,10 @@ class ImpulseSolver(nn.Module):
         Minv_sqrt_Jac_T = (Minv_sqrt @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
         A_decom = Minv_sqrt_Jac_T
         # make sure v_star is "valid", avoid unbounded cvx problem
+        # v_star = J J_T v_star
         v_star = Jac.reshape(n_cld*d, n*d) @ (Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1))
+        # compression phase impulse
         try:
-            # compression phase impulse
             impulse = self.solve_impulse(
                 A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
             )

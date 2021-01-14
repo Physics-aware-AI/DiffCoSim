@@ -89,7 +89,7 @@ class ConstrainedLagrangianDynamics(nn.Module):
     def __init__(self,
         V,
         Minv: Callable[[Tensor], Tensor],
-        DPhi: Callable[[Tensor], Tensor],
+        DPhi: Callable[[Tensor, Tensor], Tensor],
         shape
     ):
         super().__init__()

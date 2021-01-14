@@ -5,7 +5,7 @@ sys.path.append(PARENT_DIR)
 
 from datasets.datasets import RigidBodyDataset
 from systems.bouncing_mass_points import BouncingMassPoints
-from systems.chain_pendulum_with_wall import ChainPendulum_w_Wall
+from systems.chain_pendulum_with_contact import ChainPendulum_w_Contact
 from pytorch_lightning import seed_everything
 from models.impulse import ImpulseSolver
 
