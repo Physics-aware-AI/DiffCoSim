@@ -5,7 +5,6 @@ sys.path.append(PARENT_DIR)
 
 from datasets.datasets import RigidBodyDataset
 from systems.bouncing_mass_points import BouncingMassPoints
-from systems.chain_pendulum_with_wall import ChainPendulum_w_Wall
 from pytorch_lightning import seed_everything
 
 import torch
@@ -29,7 +28,7 @@ def test_BM2_0():
         body = body,
         dtype = torch.float32,
         chunk_len = 100,
-        regen=False
+        regen=True
     )
 
     ani = body.animate(dataset.zs, 1)

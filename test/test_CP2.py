@@ -29,7 +29,7 @@ def test_CP2_0():
         body = body,
         dtype = torch.float32,
         chunk_len = 100,
-        regen=False
+        regen=True
     )
 
     N, T = dataset.zs.shape[:2]
@@ -40,7 +40,7 @@ def test_CP2_0():
     plt.plot(energy[0])
     plt.show()
 
-    ani = body.animate(dataset.zs, 2)
+    ani = body.animate(dataset.zs, 1)
     ani.save(os.path.join(THIS_DIR, 'test_CP2_0.gif'))
 
     assert 1

@@ -2,6 +2,7 @@ import os, sys
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PARENT_DIR)
+import json
 
 from datasets.datasets import RigidBodyDataset
 from systems.bouncing_mass_points import BouncingMassPoints
@@ -60,5 +61,32 @@ def test_load_saved_tensor():
         bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor = tensors
         body.impulse_solver.get_dv_wo_J_e(*tensors)
 
+def test_load_saved_tensor_0():
+    body_kwargs_file = "BM3_homo_cor1_mu0"
+    with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
+        body_kwargs = json.load(file)
+    body = BouncingMassPoints(body_kwargs_file, **body_kwargs)
+    tensors = torch.load(os.path.join(PARENT_DIR, "tensors", "tensors_0", "rest.pt"))
+    if len(tensors) == 8:
+        bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor = tensors
+        body.impulse_solver.get_dv_wo_J_e(*tensors)
+    else:
+        bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi = tensors
+        body.impulse_solver.get_dv_w_J_e(*tensors)
+
+
+def test_load_saved_tensor_1():
+    body_kwargs_file = "CP1_wall_homo_cor1_mu1"
+    with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
+        body_kwargs = json.load(file)
+    body = ChainPendulum_w_Contact(body_kwargs_file, **body_kwargs)
+    tensors = torch.load(os.path.join(PARENT_DIR, "tensors", "tensors_610", "comp.pt"))
+    if len(tensors) == 8:
+        bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor = tensors
+        body.impulse_solver.get_dv_wo_J_e(*tensors)
+    else:
+        bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi = tensors
+        body.impulse_solver.get_dv_w_J_e(*tensors)
+
 if __name__ == "__main__":
-    test_load_saved_tensor()
+    test_load_saved_tensor_1()

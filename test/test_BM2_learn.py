@@ -5,7 +5,6 @@ sys.path.append(PARENT_DIR)
 
 from datasets.datasets import RigidBodyDataset
 from systems.bouncing_mass_points import BouncingMassPoints
-from systems.chain_pendulum_with_wall import ChainPendulum_w_Wall
 from pytorch_lightning import seed_everything
 
 import torch
@@ -25,12 +24,12 @@ def test_BM2_learn_0():
         "logs",
         "BM2_homo_cor1_mu0_N800",
         "version_0",
-        "epoch=934.ckpt"
+        "epoch=976.ckpt"
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     print(torch.exp(model.model.m_params["0"]))
-    print(torch.sigmoid(model.model.cor_params))
-    print(F.softplus(model.model.mu_params))
+    print(F.hardsigmoid(model.model.cor_params))
+    print(F.relu(model.model.mu_params))
     model.hparams.batch_size = 2
     dataloader = model.test_dataloader()
     test_batch = next(iter(dataloader))
@@ -55,12 +54,12 @@ def test_BM2_learn_1():
         "logs",
         "BM2_homo_cor0.5_mu0.5_N800",
         "version_0",
-        "epoch=635.ckpt"
+        "epoch=818.ckpt"
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     print(torch.exp(model.model.m_params["0"]))
-    print(torch.sigmoid(model.model.cor_params))
-    print(F.softplus(model.model.mu_params))
+    print(F.hardsigmoid(model.model.cor_params))
+    print(F.relu(model.model.mu_params))
     model.hparams.batch_size = 2
     dataloader = model.test_dataloader()
     test_batch = next(iter(dataloader))

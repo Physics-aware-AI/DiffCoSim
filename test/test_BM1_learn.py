@@ -24,8 +24,8 @@ def test_BM1_learn_0():
         PARENT_DIR,
         "logs",
         "BM1_homo_cor1_mu0_N800",
-        "version_1",
-        "epoch=924-step=3699.ckpt"
+        "version_0",
+        "epoch=968.ckpt"
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     print(torch.exp(model.model.m_params["0"]))
@@ -55,12 +55,12 @@ def test_BM1_learn_1():
         "logs",
         "BM1_homo_cor0.5_mu0.5_N800",
         "version_0",
-        "epoch=780.ckpt"
+        "epoch=932.ckpt"
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     print(torch.exp(model.model.m_params["0"]))
-    print(F.sigmoid(model.model.cor_params))
-    print(F.softplus(model.model.mu_params))
+    print(F.hardsigmoid(model.model.cor_params))
+    print(F.relu(model.model.mu_params))
     model.hparams.batch_size = 2
     dataloader = model.test_dataloader()
     test_batch = next(iter(dataloader))
@@ -85,12 +85,12 @@ def test_BM1_learn_2():
         "logs",
         "BM1_homo_cor0_mu0_N800",
         "version_0",
-        "epoch=911.ckpt"
+        "epoch=852.ckpt"
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     print(torch.exp(model.model.m_params["0"]))
-    print(F.sigmoid(model.model.cor_params))
-    print(F.softplus(model.model.mu_params))
+    print(F.hardsigmoid(model.model.cor_params))
+    print(F.relu(model.model.mu_params))
     model.hparams.batch_size = 2
     dataloader = model.test_dataloader()
     test_batch = next(iter(dataloader))
@@ -115,12 +115,12 @@ def test_BM1_learn_3():
         "logs",
         "BM1_homo_cor1_mu0_g0_N800",
         "version_0",
-        "epoch=992.ckpt"
+        "epoch=448.ckpt"
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     print(torch.exp(model.model.m_params["0"]))
-    print(F.sigmoid(model.model.cor_params))
-    print(F.softplus(model.model.mu_params))
+    print(F.hardsigmoid(model.model.cor_params))
+    print(F.relu(model.model.mu_params))
     model.hparams.batch_size = 2
     dataloader = model.test_dataloader()
     test_batch = next(iter(dataloader))

@@ -4,6 +4,7 @@ import torch.nn as nn
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 from diffcp.cone_program import SolverError
+from symeig import symeig
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -164,22 +165,23 @@ class ImpulseSolver(nn.Module):
         L_T = L.t() # (n, n)
         L_T_J_e_T = (L_T @ J_e_T.reshape(n, d*C)).reshape(n*d, C)
         Q = (L_T_J_e_T @ M_e) @ L_T_J_e_T.t() # (n*d, n*d)
-        e, V = torch.symeig(Q, eigenvectors=True)
+        e, V = symeig(Q)
         if not torch.allclose(e, (e>0.5).to(dtype=e.dtype), atol=1e-6):
             print(f"warning: eigenvalues is {e}")
         L_V_s = (L @ V[:, :n*d-C].reshape(n, d*(n*d-C))).reshape(n*d, n*d-C) # (n*d, n*d-C)
         V_s_T_L_T_Jac_T = L_V_s.t() @ Jac.reshape(n_cld*d, n*d).t() # (n*d-C, n_cld*d)
         A_decom = V_s_T_L_T_Jac_T
         # make sure v_star is "valid", avoid unbounded cvx problem
-        # (J J_T - J J_e_T (J_e J_e_T)^-1 J_e J_T) * v_star
-        Jac_T_v_star = Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1) # (n*d, 1)
-        J_e_Jac_T_v_star = J_e @ Jac_T_v_star # (C, 1)
-        v_right = J_e_T @ torch.solve(J_e_Jac_T_v_star, J_e @ J_e_T)[0] # (n*d, 1)
-        v_star = Jac @ (Jac_T_v_star - v_right) # (n_cld*d, 1)
+        v_star_c = self.get_v_star_c_w_J_e(n_cld, n, d, v_star, Jac.reshape(n_cld*d, n*d), J_e)
+
+        # Jac_T_v_star = Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1) # (n*d, 1)
+        # J_e_Jac_T_v_star = J_e @ Jac_T_v_star # (C, 1)
+        # v_right = J_e_T @ torch.solve(J_e_Jac_T_v_star, J_e @ J_e_T)[0] # (n*d, 1)
+        # v_star_c = Jac.reshape(n_cld*d, n*d) @ (Jac_T_v_star - v_right) # (n_cld*d, 1)
         # compression phase impulse
         try:
-            impulse = self.solve_impulse(
-                A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
+            impulse = self.solve_compression_impulse(
+                A_decom, Jac_v, mu, n_cld, d
             )
         except SolverError as e:
             self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
@@ -193,17 +195,33 @@ class ImpulseSolver(nn.Module):
         Jac_v_prev_r = Jac.reshape(n_cld*d, n*d) @ v_prev_r.reshape(n*d, 1) # n_cld*d, 1
         target_impulse = (cor.reshape(-1) * impulse.reshape(n_cld, d)[:, 0]).reshape(n_cld, 1)
         try:
-            impulse_star_r = self.solve_impulse(
-                A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse
+            impulse_star_r = self.solve_restitution_impulse(
+                A_decom, Jac_v_prev_r, v_star_c, mu, n_cld, d, target_impulse=target_impulse
             )
         except SolverError as e:
-            self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+            self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
             impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after restitution phase, compensate penetration
         dv_rest = (M_hat_inv_Jac_T @ impulse_star_r).reshape(n, d)
         dv = torch.zeros_like(v)
         dv[bs_idx] = dv_comp + dv_rest
         return dv
+
+    def get_v_star_c_w_J_e(self, n_cld, n, d, v_star, J, J_e):
+        if n_cld > n:
+            # (J J_T - J J_e_T (J_e J_e_T)^-1 J_e J_T) * v_star
+            J_T_v_star = J.t() @ v_star.reshape(n_cld*d, 1)
+            J_T_J__inv_J_T_v_star = torch.solve(J_T_v_star, J.t() @ J)[0]
+            J_e__J_T_J__inv_J_T_v_star = J_e @ J_T_J__inv_J_T_v_star
+            v_right = J_e.t() @ torch.solve(J_e__J_T_J__inv_J_T_v_star, J_e @ J_e.t())[0]
+            v_star_c = J @ (J_T_J__inv_J_T_v_star - v_right)
+        else:
+            J_J_T__inv_v_star = torch.solve(v_star.reshape(n_cld*d, 1), J @ J.t())[0]
+            J_T__J_J_T__inv_v_star = J.t() @ J_J_T__inv_v_star
+            J_e_J_T__J_J_T__inv_v_star = J_e @ J_T__J_J_T__inv_v_star
+            v_right = J_e.t() @ torch.solve(J_e_J_T__J_J_T__inv_v_star, J_e @ J_e.t())[0]
+            v_star_c = v_star.reshape(n_cld*d, 1) - J @ v_right
+        return v_star_c
 
     def get_dv_wo_J_e(self, bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor):
         n_cld, d, n_o, n_p, _ = Jac.shape
@@ -213,12 +231,17 @@ class ImpulseSolver(nn.Module):
         Minv_sqrt_Jac_T = (Minv_sqrt @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
         A_decom = Minv_sqrt_Jac_T
         # make sure v_star is "valid", avoid unbounded cvx problem
-        # v_star = J J_T v_star
-        v_star = Jac.reshape(n_cld*d, n*d) @ (Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1))
+        if n_cld > n: # Jac is a tall matrix
+            # v_star_c = J (J_T J)^-1 J_T v_star
+            v_star_euc = Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1) # (n*d, 1)
+            v_star_euc = torch.solve(v_star_euc, Jac.reshape(n_cld*d, n*d).t() @ Jac.reshape(n_cld*d, n*d))[0]
+            v_star_c = Jac.reshape(n_cld*d, n*d) @ v_star_euc
+        else:
+            v_star_c = v_star
         # compression phase impulse
         try:
-            impulse = self.solve_impulse(
-                A_decom, Jac_v, v_star, mu, n_cld, d, target_impulse=None
+            impulse = self.solve_compression_impulse(
+                A_decom, Jac_v, mu, n_cld, d
             )
         except SolverError as e:
             self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
@@ -231,8 +254,8 @@ class ImpulseSolver(nn.Module):
         Jac_v_prev_r = Jac.reshape(n_cld*d, n*d) @ v_prev_r.reshape(n*d, 1) # n_cld*d, 1
         target_impulse = (cor.reshape(-1) * impulse.reshape(n_cld, d)[:, 0]).reshape(n_cld, 1)
         try:
-            impulse_star_r = self.solve_impulse(
-                A_decom, Jac_v_prev_r, v_star, mu, n_cld, d, target_impulse=target_impulse
+            impulse_star_r = self.solve_restitution_impulse(
+                A_decom, Jac_v_prev_r, v_star_c, mu, n_cld, d, target_impulse=target_impulse
             )
         except SolverError as e:
             self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
@@ -243,11 +266,28 @@ class ImpulseSolver(nn.Module):
         dv[bs_idx] = dv_comp + dv_rest
         return dv
 
-    def solve_impulse(self, A_decom, v_, v_star, mu, n_cld, d, target_impulse):
-        """
-        collision phase: target_impulse = None
-        restitution phase: target_impulse = COR * impulse_from_collision_phase
-        """
+    def solve_compression_impulse(self, A_decom, v_, mu, n_cld, d):
+        # v_: (n_cld*d, 1)
+        n_cld_d = v_.shape[0]
+        f = cp.Variable((n_cld_d, 1))
+        A_decom_p = cp.Parameter(A_decom.shape) # Todo
+        v_p = cp.Parameter((n_cld_d, 1))
+        mu_p = cp.Parameter((mu.shape[0], 1)) 
+
+        objective = cp.Minimize(0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p)))
+        constraints = [cp.SOC(cp.multiply(mu_p[i], f[i*d]), f[i*d+1:i*d+d]) for i in range(n_cld)] + \
+                        [f[i*d] >= 0 for i in range(n_cld)]
+        problem = cp.Problem(objective, constraints)
+        cvxpylayer = CvxpyLayer(problem, parameters=[A_decom_p, v_p, mu_p], variables=[f])
+
+        impulse, = cvxpylayer(
+            A_decom, 
+            v_.reshape(-1, 1), 
+            mu.reshape(-1, 1), 
+        )
+        return impulse
+
+    def solve_restitution_impulse(self, A_decom, v_, v_star, mu, n_cld, d, target_impulse):
         # v_: (n_cld*d, 1)
         n_cld_d = v_.shape[0]
         f = cp.Variable((n_cld_d, 1))
@@ -258,21 +298,12 @@ class ImpulseSolver(nn.Module):
         target_impulse_p = cp.Parameter((n_cld, 1))
 
         objective = cp.Minimize(0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p)) - cp.sum(cp.multiply(f, v_star_p)))
+        # the second line is to avoid negative target_impulse due to numerical error
         constraints = [cp.SOC(cp.multiply(mu_p[i], f[i*d]), f[i*d+1:i*d+d]) for i in range(n_cld)] + \
+                        [f[i*d] >= 0 for i in range(n_cld)] + \
                         [f[i*d] >= target_impulse_p[i] for i in range(n_cld)]
         problem = cp.Problem(objective, constraints)
         cvxpylayer = CvxpyLayer(problem, parameters=[A_decom_p, v_p, v_star_p, mu_p, target_impulse_p], variables=[f])
-        if target_impulse is None:
-            target_impulse = torch.zeros(n_cld, 1, dtype=v_.dtype, device=v_.device)
-            impulse, = cvxpylayer(
-                A_decom, 
-                v_.reshape(-1, 1), 
-                torch.zeros_like(v_star.reshape(-1, 1)), 
-                mu.reshape(-1, 1), 
-                target_impulse.reshape(-1, 1)
-            )
-            return impulse
-
         impulse_star, = cvxpylayer(
             A_decom, 
             v_.reshape(-1, 1), 

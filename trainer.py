@@ -24,6 +24,7 @@ from systems.bouncing_mass_points import BouncingMassPoints
 from systems.chain_pendulum_with_contact import ChainPendulum_w_Contact
 # from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
+# from find_bad_grad import BadGradFinder
 
 seed_everything(0)
 
@@ -126,7 +127,21 @@ class Model(pl.LightningModule):
         logs = {"train/loss": loss, "train/nfe": self.model.nfe}
         self.log("train/loss", loss, prog_bar=True)
         self.log("train/nfe", self.model.nfe, prog_bar=True)
+        # self.bad_grad_finder = BadGradFinder()
+        # self.bad_grad_finder.register_hooks(loss)
+        # self.loss = loss
         return loss
+
+    # def on_after_backward(self):
+    #     # loss 
+    #     self.bad_grad_finder.make_dot(self.loss)
+
+    # def on_train_batch_end(self, outputs, batch, batch_idx, dataloader_idx):
+    #     self.bad_grad_finder.dot.save(
+    #         os.path.join(self.logger[0].log_dir, f"epoch{self.current_epoch}_batch{batch_idx}.dot")
+    #     )
+    #     self.bad_grad_finder.delete()
+    #     del self.bad_grad_finder
 
     def test_step(self, batch, batch_idx):
         (z0, _), _ = batch
@@ -245,6 +260,7 @@ if __name__ == "__main__":
 
     trainer = Trainer.from_argparse_args(hparams,
                                          deterministic=True,
+                                         terminate_on_nan=True,
                                          callbacks=[checkpoint],
                                          logger=[tb_logger])
 
