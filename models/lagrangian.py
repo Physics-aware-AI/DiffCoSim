@@ -10,7 +10,7 @@ from typing import Optional, Union, Tuple
 from models.impulse import ImpulseSolver
 
 class CLNNwC(nn.Module):
-    def __init__(self, body_graph, impulse_solver, n_c, d, 
+    def __init__(self, body_graph, impulse_solver, n_c, d, is_homo,
         hidden_size: int = 256,
         num_layers: int = 3,
         device: torch.device = torch.device('cpu'),
@@ -20,7 +20,7 @@ class CLNNwC(nn.Module):
         super().__init__()
         self.body_graph = body_graph
         self.n = len(body_graph.nodes)
-        self.d = d
+        self.d, self.n_c = d, n_c
         self.dtype = dtype
         self.nfe = 0
         self.dynamics = ConstrainedLagrangianDynamics(self.potential, self.Minv_op, 
@@ -37,8 +37,13 @@ class CLNNwC(nn.Module):
         assert len(self.m_params) == 1 # limited support for now
         self.n_p = int(list(self.m_params.keys())[0]) + 1
         self.n_o = self.n // self.n_p
-        self.mu_params = nn.Parameter(torch.rand(n_c, dtype=dtype))
-        self.cor_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
+        if is_homo:
+            self.mu_params = nn.Parameter(torch.rand(1, dtype=dtype))
+            self.cor_params = nn.Parameter(torch.randn(1, dtype=dtype))
+        else:
+            self.mu_params = nn.Parameter(torch.rand(n_c, dtype=dtype))
+            self.cor_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
+        self.is_homo = is_homo
 
         self.impulse_solver = impulse_solver
 
@@ -110,8 +115,12 @@ class CLNNwC(nn.Module):
         assert (z0.ndim == 4) and (ts.ndim == 1)
         assert (z0.shape[-1] == self.d) and z0.shape[-2] == self.n
         bs = z0.shape[0]
-        mus = F.relu(self.mu_params)
-        cors = F.hardsigmoid(self.cor_params)
+        if self.is_homo:
+            mus = F.relu(self.mu_params * torch.ones(self.n_c).type_as(self.mu_params))
+            cors = F.hardsigmoid(self.cor_params* torch.ones(self.n_c).type_as(self.cor_params))
+        else:
+            mus = F.relu(self.mu_params)
+            cors = F.hardsigmoid(self.cor_params)
         ts = ts.to(z0.device, z0.dtype)
         zt = z0.reshape(bs, -1)
         zT = torch.zeros([bs, len(ts), zt.shape[1]], device=z0.device, dtype=z0.dtype)

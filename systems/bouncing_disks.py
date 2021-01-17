@@ -21,9 +21,10 @@ class BouncingDisks(RigidBody):
         mus=[0.0, 0.0, 0.0, 0.0], 
         cors=[0.0, 0.0, 0.0, 0.0],
         bdry_lin_coef=[[1, 0, 0], [0, 1, 0], [-1, 0, 1], [0, -1, 1]],
+        is_homo=False,
         dtype=torch.float64        
     ):
-        assert n_o >= 1
+        assert n_o == len(ms) == len(ls)
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=torch.float64)
@@ -36,9 +37,15 @@ class BouncingDisks(RigidBody):
         self.n = self.n_o * self.n_p
         self.bdry_lin_coef = torch.tensor(bdry_lin_coef, dtype=torch.float64)
         self.n_c = n_o * (n_o - 1) // 2 + n_o * self.bdry_lin_coef.shape[0]
-        assert len(mus) == len(cors) == self.n_c
-        self.mus = torch.tensor(mus, dtype=torch.float64)
-        self.cors = torch.tensor(cors, dtype=torch.float64)
+        if is_homo:
+            assert len(mus) == len(cors) == 1
+            self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
+            self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
+        else:
+            assert len(mus) == len(cors) == self.n_c
+            self.mus = torch.tensor(mus, dtype=torch.float64)
+            self.cors = torch.tensor(cors, dtype=torch.float64)
+        self.is_homo = is_homo
 
         delta = torch.tensor([[-1, 1, 0], [-1, 0, 1]], dtype=torch.float64) # 2, 3
 

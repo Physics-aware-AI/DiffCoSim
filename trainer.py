@@ -80,8 +80,9 @@ class Model(pl.LightningModule):
 
         self.model = str_to_class(hparams.network_class)(body_graph=body.body_graph, 
                                                          impulse_solver=body.impulse_solver,
-                                                         d = body.d,
-                                                         n_c = body.n_c,
+                                                         d=body.d,
+                                                         n_c=body.n_c,
+                                                         is_homo=body.is_homo,
                                                          device=self.device,
                                                          dtype=self.dtype,
                                                          **vars(hparams))
