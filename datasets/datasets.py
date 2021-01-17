@@ -58,27 +58,51 @@ class RigidBodyDataset(Dataset):
         ts = ts.repeat(n_traj, 1)
         return ts, zs, is_clds
 
-    def chunk_training_data(self, ts, zs, is_clds, chunk_len):
+    def chunk_training_data(self, ts, zs, is_clds, chunk_len, p_cld=0.5):
         """ Randomly samples chunks of trajectory data, returns tensors shaped for training.
-        Inputs: [ts (bs, traj_len)] [zs (bs, traj_len, *z_dim)] [is_clds (bs, traj_len)]
+        Inputs: [ts (bs, T)] [zs (bs, T, *z_dim)] [is_clds (bs, T)]
         outputs: [chosen_ts (bs, chunk_len)] [chosen_zs (bs, chunk_len, *z_dim)]"""
-        n_trajs, traj_len, *z_dim = zs.shape
-        n_chunks = traj_len // chunk_len
+        bs, T, *z_dim = zs.shape
+        n_chunks = (T - chunk_len + 1)
         # Cut each trajectory into non-overlapping chunks
-        chunked_ts = torch.stack(ts.chunk(n_chunks, dim=1))
-        chunked_zs = torch.stack(zs.chunk(n_chunks, dim=1))
-        chunked_is_clds = torch.stack(is_clds.chunk(n_chunks, dim=1)) # n_chunks, bs, chunk_len
+        chunked_ts = torch.stack([ts[:, i:i+chunk_len] for i in range(n_chunks)], dim=0) # n_chunks, bs, chunk_len
+        chunked_zs = torch.stack([zs[:, i:i+chunk_len] for i in range(n_chunks)], dim=0) # n_chunks, bs, chunk_len, *z_dim
+        chunked_is_clds = torch.stack([is_clds[:, i:i+chunk_len] for i in range(n_chunks)], dim=0) # n_chunks, bs, chunk_len
         is_clds_t0 = chunked_is_clds[..., 0] # n_chunks, bs
+        is_clds_chunk = chunked_is_clds.sum(-1) > 0 # n_chunks, bs
         is_cld = chunked_is_clds.sum(dim=-1) # n_chunks, bs
         # From each trajectory, we choose a single chunk randomly
         # we make sure that the initial condition is not during collision
-        chosen_ts = torch.zeros(n_trajs, chunk_len, dtype=ts.dtype, device=ts.device)
-        chosen_zs = torch.zeros(n_trajs, chunk_len, *chunked_zs.shape[3:], dtype=zs.dtype, device=zs.device)
-        is_cld_in_chosen = torch.zeros(n_trajs, dtype=torch.bool, device=zs.device)
-        for i in range(n_trajs):
-            no_cld0_idx = torch.nonzero(is_clds_t0[:, i] == 0, as_tuple=False)[:, 0]
-            rand_idx = torch.randint(0, len(no_cld0_idx), (1,), device=zs.device)[0]
-            chosen_ts[i, :] = chunked_ts[no_cld0_idx[rand_idx], i]
-            chosen_zs[i, :] = chunked_zs[no_cld0_idx[rand_idx], i]
-            is_cld_in_chosen[i] = chunked_is_clds[no_cld0_idx[rand_idx], i].sum() > 0
+        chosen_ts = torch.zeros(bs, chunk_len, dtype=ts.dtype, device=ts.device)
+        chosen_zs = torch.zeros(bs, chunk_len, *chunked_zs.shape[3:], dtype=zs.dtype, device=zs.device)
+        is_cld_in_chosen = torch.zeros(bs, dtype=torch.bool, device=zs.device)
+        # we make sure there are roughly p_cld trajectories that contains collision
+        is_cld_T = is_clds.sum(-1) > 0
+        cld_ratio = (is_cld_T).sum() / bs
+        if cld_ratio < p_cld:
+            contains_cld = is_cld_T
+        else:
+            cld_idx = torch.nonzero(is_cld_T, as_tuple=False)[:, 0]
+            rand_idx = torch.rand(len(cld_idx)) < p_cld / cld_ratio
+            
+            contains_cld = torch.zeros(bs, dtype=torch.bool, device=zs.device)
+            contains_cld[cld_idx[rand_idx]] = True
+        for i in range(bs):            
+            no_cld0_no_cld_chunk_idx = torch.nonzero(
+                torch.logical_and(is_clds_t0[:, i] == 0, is_clds_chunk[:, i] == 0), 
+                as_tuple=False
+            )[:, 0]
+            no_cld0_cld_chunk_idx = torch.nonzero(
+                torch.logical_and(is_clds_t0[:, i] == 0, is_clds_chunk[:, i] == 1), 
+                as_tuple=False
+            )[:, 0]
+            if (contains_cld[i] and len(no_cld0_cld_chunk_idx) > 0) or len(no_cld0_no_cld_chunk_idx) == 0:
+                rand_idx = torch.randint(0, len(no_cld0_cld_chunk_idx), (1,), device=zs.device)[0]
+                chunk_idx = no_cld0_cld_chunk_idx[rand_idx]
+            else:
+                rand_idx = torch.randint(0, len(no_cld0_no_cld_chunk_idx), (1,), device=zs.device)[0]
+                chunk_idx = no_cld0_no_cld_chunk_idx[rand_idx]
+            chosen_ts[i, :] = chunked_ts[chunk_idx, i]
+            chosen_zs[i, :] = chunked_zs[chunk_idx, i]
+            is_cld_in_chosen[i] = chunked_is_clds[chunk_idx, i].sum() > 0
         return chosen_ts, chosen_zs, is_cld_in_chosen

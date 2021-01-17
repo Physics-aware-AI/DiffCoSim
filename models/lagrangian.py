@@ -10,7 +10,8 @@ from typing import Optional, Union, Tuple
 from models.impulse import ImpulseSolver
 
 class CLNNwC(nn.Module):
-    def __init__(self, body_graph, impulse_solver, n_c, d, is_homo,
+    def __init__(self, body_graph, impulse_solver, n_c, d, 
+        is_homo=False,
         hidden_size: int = 256,
         num_layers: int = 3,
         device: torch.device = torch.device('cpu'),
