@@ -74,9 +74,12 @@ class BouncingMassPoints(RigidBody):
         return torch.stack([x0, x_dot0], dim=1) # (N, 2, n, d) 
 
     def check_collision(self, x):
+        bs = x.shape[0]
         is_cld_0, is_cld_ij, dist_ij = self.check_ball_collision(x)
         is_cld_1, is_cld_bdry, dist_bdry = self.check_boundry_collision(x)
-        return torch.logical_or(is_cld_0, is_cld_1), is_cld_ij, is_cld_bdry, dist_ij, dist_bdry
+        is_cld_limit = torch.zeros(bs, 0, 2, dtype=torch.bool, device=x.device)
+        dist_limit = torch.zeros(bs, 0, 2).type_as(x)
+        return torch.logical_or(is_cld_0, is_cld_1), is_cld_ij, is_cld_bdry, is_cld_limit, dist_ij, dist_bdry, dist_limit
 
     def check_ball_collision(self, x):
         # x: (bs, n, 2)
@@ -109,7 +112,7 @@ class BouncingMassPoints(RigidBody):
         is_collide = is_collide_bdry.sum([1, 2]) > 0
         return is_collide, is_collide_bdry, dist_bdry
 
-    def cld_2did_to_1did(self, cld_ij_ids, cld_bdry_ids):
+    def cld_2did_to_1did(self, cld_ij_ids, cld_bdry_ids, cld_limit_ids):
         n = self.n
         i, j = cld_ij_ids.unbind(dim=1)
         ij_1d_ids = j + n*i - (i+1) * (i+2) // 2

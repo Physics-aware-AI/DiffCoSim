@@ -78,7 +78,7 @@ class RigidBodyDataset(Dataset):
         is_cld_in_chosen = torch.zeros(bs, dtype=torch.bool, device=zs.device)
         # we make sure there are roughly p_cld trajectories that contains collision
         is_cld_T = is_clds.sum(-1) > 0
-        cld_ratio = (is_cld_T).sum() / bs
+        cld_ratio = (is_cld_T).sum().true_divide(bs)
         if cld_ratio < p_cld:
             contains_cld = is_cld_T
         else:

@@ -13,8 +13,8 @@ PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 class ImpulseSolver(nn.Module):
     def __init__(
         self, dt, n_o, n_p, d, 
-        check_collision, cld_2did_to_1did, DPhi, 
-        ls, bdry_lin_coef, delta=None,
+        check_collision, cld_2did_to_1did, DPhi,  
+        ls, bdry_lin_coef, delta=None, get_limit_e_div_l=None,
         save_dir=os.path.join(PARENT_DIR, "tensors")
     ):
         super().__init__()
@@ -33,6 +33,7 @@ class ImpulseSolver(nn.Module):
             self.delta = None
         else:
             self.register_buffer("delta", delta)
+        self.get_limit_e_div_l = get_limit_e_div_l
         self.save_dir = save_dir
 
     def add_impulse(self, xv, mus, cors, Minv):
@@ -41,9 +42,12 @@ class ImpulseSolver(nn.Module):
         x = xv.reshape(bs, 2, n, d)[:, 0]
         v = xv.reshape(bs, 2, n, d)[:, 1]
         # x, v = xv.reshape(bs, 2, n, d).unbind(dim=1)
-        is_cld, is_cld_ij, is_cld_bdry, dist_ij, dist_bdry = self.check_collision(x)
+        is_cld, is_cld_ij, is_cld_bdry, is_cld_limit, dist_ij, dist_bdry, dist_limit= self.check_collision(x)
         if is_cld.sum() == 0:
             return xv, is_cld
+
+        if is_cld_limit.shape[1] > 0:
+            self.e_n_limit_div_l, self.e_t_limit_div_l = self.get_limit_e_div_l(x)
 
         # deal with collision individually. 
         new_v = 1 * v
@@ -51,23 +55,26 @@ class ImpulseSolver(nn.Module):
             # construct contact Jacobian
             cld_ij_ids = torch.nonzero(is_cld_ij[bs_idx], as_tuple=False) # n_cld_ij, 2
             cld_bdry_ids = torch.nonzero(is_cld_bdry[bs_idx], as_tuple=False) # n_cld_bdry, 2
+            cld_limit_ids = torch.nonzero(is_cld_limit[bs_idx], as_tuple=False) # n_cld_limit, 
 
             n_cld_ij = len(cld_ij_ids) ; n_cld_bdry = len(cld_bdry_ids)
-            n_cld = n_cld_ij + n_cld_bdry
+            n_cld_limit = len(cld_limit_ids)
+            n_cld = n_cld_ij + n_cld_bdry + n_cld_limit
 
             # contact Jacobian (n_cld, d, n, d)
-            Jac = self.get_contact_Jacobian(bs_idx, x, cld_ij_ids, cld_bdry_ids)
+            Jac = self.get_contact_Jacobian(bs_idx, x, cld_ij_ids, cld_bdry_ids, cld_limit_ids)
             # Jac_v, v_star, mu, cor
             Jac_v = Jac.reshape(n_cld*d, n*d) @ v[bs_idx].reshape(n*d, 1) # n_cld*d, 1
             v_star = torch.zeros([n_cld, d], dtype=Jac_v.dtype, device=Jac_v.device)
             v_star[:,0] = torch.cat([
                 - dist_ij[bs_idx, cld_ij_ids[:,0], cld_ij_ids[:,1]] / self.dt / 8,
                 - dist_bdry[bs_idx, cld_bdry_ids[:,0], cld_bdry_ids[:,1]] / self.dt / 8,
+                - dist_limit[bs_idx, cld_limit_ids[:,0], cld_limit_ids[:,1]] / self.dt / 8
             ], dim=0) # n_cld, d
 
             
-            mu = mus[self.cld_2did_to_1did(cld_ij_ids, cld_bdry_ids)]
-            cor = cors[self.cld_2did_to_1did(cld_ij_ids, cld_bdry_ids)]
+            mu = mus[self.cld_2did_to_1did(cld_ij_ids, cld_bdry_ids, cld_limit_ids)]
+            cor = cors[self.cld_2did_to_1did(cld_ij_ids, cld_bdry_ids, cld_limit_ids)]
 
             # get equality constraints
             DPhi = self.DPhi(x[bs_idx:bs_idx+1], v[bs_idx:bs_idx+1]) # 
@@ -80,10 +87,11 @@ class ImpulseSolver(nn.Module):
 
         return torch.stack([x, new_v], dim=1).reshape(bs, -1), is_cld
 
-    def get_contact_Jacobian(self, bs_idx, x, cld_ij_ids, cld_bdry_ids):
+    def get_contact_Jacobian(self, bs_idx, x, cld_ij_ids, cld_bdry_ids, cld_limit_ids):
         bs, n_o, n_p, d = x.shape[0], self.n_o, self.n_p, self.d
         n_cld_ij = len(cld_ij_ids) ; n_cld_bdry = len(cld_bdry_ids)
-        n_cld = n_cld_ij + n_cld_bdry
+        n_cld_limit = len(cld_limit_ids)
+        n_cld = n_cld_ij + n_cld_bdry + n_cld_limit
 
         x = x.reshape(bs, n_o, n_p, d)
         # calculate cld_bdry contact point coordinates
@@ -123,6 +131,18 @@ class ImpulseSolver(nn.Module):
         for cid, (i, _) in enumerate(cld_bdry_ids):
             Jac[n_cld_ij+cid, 0, i, :] = - c_til_bdry_1[cid, :, None] * e_n_bdry[cid, None, :]
             Jac[n_cld_ij+cid, 1, i, :] = - c_til_bdry_1[cid, :, None] * e_t_bdry[cid, None, :]
+        # limited support for the constraint type "limit"
+        for cid, (i_limit, t_limit) in enumerate(cld_limit_ids):
+            if t_limit == 0:
+                Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit] += self.e_n_limit_div_l[bs_idx, i_limit, None, :]
+                Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit+1] += - self.e_n_limit_div_l[bs_idx, i_limit+1, None, :]
+                Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit] += self.e_t_limit_div_l[bs_idx, i_limit, None, :]
+                Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit+1] += - self.e_t_limit_div_l[bs_idx, i_limit+1, None, :]
+            else:
+                Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit] += - self.e_n_limit_div_l[bs_idx, i_limit, None, :]
+                Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit+1] += self.e_n_limit_div_l[bs_idx, i_limit+1, None, :]
+                Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit] += - self.e_t_limit_div_l[bs_idx, i_limit, None, :]
+                Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit+1] += self.e_t_limit_div_l[bs_idx, i_limit+1, None, :]
 
         return Jac
 

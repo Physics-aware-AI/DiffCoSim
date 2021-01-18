@@ -24,8 +24,8 @@ def test_BD2_learn_0():
         PARENT_DIR,
         "logs",
         "BD2_homo_cor1_mu0.5_N800",
-        "version_0",
-        "epoch=926.ckpt"
+        "version_1",
+        "epoch=664.ckpt"
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     print(torch.exp(model.model.m_params["2"]))
@@ -54,8 +54,8 @@ def test_BD2_learn_1():
         PARENT_DIR,
         "logs",
         "BD2_homo_cor1_mu0.5_g0_N800",
-        "version_0",
-        "epoch=298.ckpt"
+        "version_1",
+        "epoch=997.ckpt"
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     print(torch.exp(model.model.m_params["2"]))

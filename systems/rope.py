@@ -8,24 +8,28 @@ from matplotlib import collections as mc
 from matplotlib.patches import Circle
 from models.impulse import ImpulseSolver
 
-class ChainPendulum_w_Contact(RigidBody):
-    dt = 0.01
-    integration_time = 1.0
+PI = 3.1415927410125732
+
+class Rope(RigidBody):
+    dt = 0.005
+    integration_time = 0.5
 
     def __init__(
         self, 
         kwargs_file_name="default",
-        n_o=2, 
+        n_o=10, 
         g=9.81,
-        ms=[0.1, 0.1], 
-        ls=[0.7, 0.7], 
-        radii=[0.1, 0.1], 
-        mus=[0.0, 0.0, 0.0, 0.0], 
-        cors=[1.0, 1.0, 1.0, 1.0], 
-        bdry_lin_coef=[[1, 0, 1], [-1, 0, 1]],
+        ms=[0.1]*10, 
+        ls=[0.05]*10, 
+        radii=[0.01], 
+        mus=[0.0], 
+        cors=[0.0], 
+        bdry_lin_coef=[[0, 0, 0]],
+        angle_limit=0.3,
+        is_homo=True,
         dtype=torch.float64
     ):
-        assert n_o == len(ms) == len(ls) == len(radii)
+        assert is_homo and n_o >= 2
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=dtype)
@@ -38,12 +42,12 @@ class ChainPendulum_w_Contact(RigidBody):
         self.g = g
         self.n_o, self.n_p, self.d = n_o, 1, 2
         self.n = self.n_o * self.n_p
+        self.angle_limit = angle_limit
 
         self.bdry_lin_coef = torch.tensor(bdry_lin_coef, dtype=dtype)
-        self.n_c = n_o * self.bdry_lin_coef.shape[0]
-        assert len(mus) == len(cors) == self.n_c
-        self.mus = torch.tensor(mus, dtype=dtype)
-        self.cors = torch.tensor(cors, dtype=dtype)
+        self.n_c = n_o - 1
+        self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
+        self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
 
         self.impulse_solver = ImpulseSolver(
             dt = self.dt,
@@ -54,7 +58,8 @@ class ChainPendulum_w_Contact(RigidBody):
             bdry_lin_coef = self.bdry_lin_coef,
             check_collision = self.check_collision,
             cld_2did_to_1did = self.cld_2did_to_1did,
-            DPhi = self.DPhi
+            DPhi = self.DPhi,
+            get_limit_e_div_l=self.get_limit_e_div_l
         )        
 
 
@@ -70,7 +75,11 @@ class ChainPendulum_w_Contact(RigidBody):
         xv0_list = []
         ptr = 0
         while ptr < N:
-            q0 = torch.rand([N, n], dtype=dtype) * 3.14
+            q0 = [torch.rand([N], dtype=dtype) * 3.14]
+            for i in range(n-1):
+                q0_i = torch.rand([N], dtype=dtype) * 2 * self.angle_limit - self.angle_limit
+                q0.append(q0[-1]+q0_i)
+            q0 = torch.stack(q0, dim=-1)
             q_dot0 = torch.randn([N, n], dtype=dtype)
             q_q_dot0 = torch.stack([q0, q_dot0], dim=1)
             xv0 = self.angle_to_global_cartesian(q_q_dot0) # (N, 2, n, d)
@@ -81,31 +90,62 @@ class ChainPendulum_w_Contact(RigidBody):
 
     def check_collision(self, x):
         bs, n, _ = x.shape
-        is_cld, is_cld_bdry, dist_bdry = self.check_boundary_collision(x)
         is_cld_ij = torch.zeros(bs, n, n, dtype=torch.bool, device=x.device)
         dist_ij = torch.zeros(bs, n, n, dtype=x.dtype, device=x.device)
-        is_cld_limit = torch.zeros(bs, 0, 2, dtype=torch.bool, device=x.device)
-        dist_limit = torch.zeros(bs, 0, 2).type_as(x)
+        is_cld_bdry = torch.zeros(bs, n, 0, dtype=torch.bool, device=x.device)
+        dist_bdry = torch.zeros(bs, n, 0).type_as(x)
+        is_cld, is_cld_limit, dist_limit = self.check_limit(x)
         return is_cld, is_cld_ij, is_cld_bdry, is_cld_limit, dist_ij, dist_bdry, dist_limit
 
-    def check_boundary_collision(self, x):
-        coef = self.bdry_lin_coef / (self.bdry_lin_coef[:, 0:1] ** 2 + 
-                    self.bdry_lin_coef[:, 1:2] ** 2).sqrt() # n_bdry, 3
-        x_one = torch.cat(
-            [x, torch.ones(*x.shape[:-1], 1, dtype=x.dtype, device=x.device)],
-            dim=-1
-        ).unsqueeze(-2) # bs, n, 1, 3
-        dist = (x_one * coef).sum(-1) # bs, n, n_bdry
-        dist_bdry = dist - self.radii[:, None]
-        is_collide_bdry = dist_bdry < 0 # bs, n, n_bdry
-        is_collide = is_collide_bdry.sum([1, 2]) > 0
-        return is_collide, is_collide_bdry, dist_bdry
+    def check_limit(self, x):
+        bs, n, _ = x.shape
+        x_dot = torch.zeros_like(x)
+        q = self.global_cartesian_to_angle(torch.stack([x, x_dot], dim=1))[:,0] # (bs, n)
+        delta_q = q[:, 1:] - q[:, :-1] # (bs, n-1)
+        # make sure in range -pi to pi
+        delta_q = torch.atan2(delta_q.sin(), delta_q.cos())
+        if torch.max(delta_q) > 3.14 or torch.min(delta_q) < -3.14:
+            print(1)
+        dist_1 = self.angle_limit - delta_q 
+        dist_2 = self.angle_limit + delta_q
+        dist_limit = torch.stack([dist_1, dist_2], dim=-1) # (bs, n-1, 2)
+        is_cld_limit = torch.stack([dist_1 < 0, dist_2 < 0], dim=-1) # (bs, n-1, 2)
+        is_cld = is_cld_limit.sum([1, 2]) > 0
+        return is_cld, is_cld_limit, dist_limit
+
+    def get_limit_e_div_l(self, x):
+        bs, n, _ = x.shape
+        x_dot = torch.zeros_like(x)
+        q = self.global_cartesian_to_angle(torch.stack([x, x_dot], dim=1))[:,0] # (bs, n)
+        e_n = torch.stack([q.cos(), q.sin()], dim=-1) # (bs, n, 2)
+        ls = self.get_ls(x)
+        e_n_div_l = e_n / ls[..., None]
+        e_t_div_l = torch.zeros_like(e_n)
+        e_t_div_l[..., 0], e_t_div_l[..., 1] = -e_n_div_l[..., 1], e_n_div_l[..., 0]
+        return e_n_div_l, e_t_div_l
+
+    def get_ls(self, x):
+        *bsT, n, _ = x.shape
+        diff = x[..., 1:, :] - x[..., :-1, :] # (*bsT, n-1, 2)
+        diff = torch.cat([x[..., 1:2, :], diff], dim=-2) # (*bsT, n, 2)
+        ls = (diff[..., 0]**2 + diff[..., 1]**2).sqrt()
+        return ls
+
+    # def check_boundary_collision(self, x):
+    #     coef = self.bdry_lin_coef / (self.bdry_lin_coef[:, 0:1] ** 2 + 
+    #                 self.bdry_lin_coef[:, 1:2] ** 2).sqrt() # n_bdry, 3
+    #     x_one = torch.cat(
+    #         [x, torch.ones(*x.shape[:-1], 1, dtype=x.dtype, device=x.device)],
+    #         dim=-1
+    #     ).unsqueeze(-2) # bs, n, 1, 3
+    #     dist = (x_one * coef).sum(-1) # bs, n, n_bdry
+    #     dist_bdry = dist - self.radii[:, None]
+    #     is_collide_bdry = dist_bdry < 0 # bs, n, n_bdry
+    #     is_collide = is_collide_bdry.sum([1, 2]) > 0
+    #     return is_collide, is_collide_bdry, dist_bdry
 
     def cld_2did_to_1did(self, cld_ij_ids, cld_bdry_ids, cld_limit_ids):
-        n = self.n
-        link_i, bdry_i = cld_bdry_ids.unbind(dim=1)
-        bdry_1d_ids = link_i * self.bdry_lin_coef.shape[0] + bdry_i
-        return bdry_1d_ids
+        return cld_limit_ids[:,0]
 
     def angle_to_global_cartesian(self, q_q_dot):
         *N2, n = q_q_dot.shape
@@ -147,13 +187,13 @@ class ChainPendulum_w_Contact(RigidBody):
         return q_q_dot
         
     def local_cartesian_to_angle(self, rel_r_r_dot):
-        assert rel_r_r_dot.ndim >= 4
+        assert rel_r_r_dot.ndim >= 3
         x, y = rel_r_r_dot[..., 0, :].chunk(2, dim=-1) # *NT1, *NT1
         vx, vy = rel_r_r_dot[..., 1, :].chunk(2, dim=-1)
         q = torch.atan2(x, -y)
         q_dot = torch.where(q < 1e-2, vx / (-y), vy / x)
-        q_unwrapped = torch.from_numpy(np.unwrap(q.detach().cpu().numpy(), axis=-2)).to(x.device, x.dtype)
-        return torch.cat([q_unwrapped, q_dot], dim=-1) # *NT2
+        # q_unwrapped = torch.from_numpy(np.unwrap(q.detach().cpu().numpy(), axis=-2)).to(x.device, x.dtype)
+        return torch.cat([q, q_dot], dim=-1) # *NT2
 
     def angle_to_cos_sin(self, q_q_dot):
         # input shape (*NT, 2, n)
@@ -162,45 +202,22 @@ class ChainPendulum_w_Contact(RigidBody):
 
     @property
     def animator(self):
-        return Pendulum_w_Wall_Animation
+        return PendulumAnimation
     
-class Pendulum_w_Wall_Animation(Animation):
+class PendulumAnimation(Animation):
     def __init__(self, qt, body):
         # qt: T, n, d
         super().__init__(qt, body)
         self.body = body
         self.n_o = body.n_o
         self.n_p = body.n_p
-
-        # x_min, x_max = self.ax.get_xlim()
-        # y_min, y_max = self.ax.get_ylim()
-        # x_min = x_min if x_min < -body.lb-0.1 else -body.lb-0.1
-        # x_max = x_max if x_max > body.rb+0.1 else body.rb+0.1
-        # self.ax.set_xlim(x_min, x_max)
-
-        x_min, y_min, x_max, y_max = -1.1, -1.1, 1.1, 1.1
-        self.ax.set_xlim(x_min, x_max)
-        self.ax.set_ylim(y_min, y_max)
-
-        # self.body = body
         self.G = body.body_graph
         empty = self.qt.shape[-1] * [[]]
-        n_o = len(nx.get_node_attributes(self.G, "tether")) + len(self.G.edges)
-        self.objects["links"] = sum([self.ax.plot(*empty, "-", color='k') for _ in range(n_o)], [])
+        n_links = len(nx.get_node_attributes(self.G, "tether")) + len(self.G.edges)
+        self.objects["links"] = sum([self.ax.plot(*empty, "-", color='k') for _ in range(n_links)], [])
         self.objects["pts"] = sum(
             [self.ax.plot(*empty, "o", ms=10*body.ms[i], c=self.colors[i]) for i in range(qt.shape[1])], []
         )
-        self.circles = [Circle(empty, body.radii[i], color=self.colors[i]) for i in range(qt.shape[1])] + []
-
-        [self.ax.add_artist(circle) for circle in self.circles]
-
-        if body.bdry_lin_coef.shape[0] == 1:
-            lines = [[(x_min, -1), (x_max, -1)]]
-        else:
-            lines = [[(-1, y_min), (-1, y_max)], [(1, y_min), (1, y_max)]]
-        # lines = [[(-body.lb, y_min), (-body.lb, y_max)], [(body.rb, y_min), (body.rb, y_max)]]
-        lc = mc.LineCollection(lines, linewidths=2)
-        self.ax.add_collection(lc)
 
     def update(self, i=0):
         links = [
@@ -214,7 +231,5 @@ class Pendulum_w_Wall_Animation(Animation):
             link_line.set_data(*link[:2])
             if self.qt.shape[-1] == 3:
                 link_line.set_3d_properties(link[2])
-        T, n, d = self.qt.shape
-        for j in range(n):
-            self.circles[j].center = self.qt[i, j][0], self.qt[i, j][1]
         return super().update(i)
+

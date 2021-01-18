@@ -110,9 +110,12 @@ class BouncingDisks(RigidBody):
         return torch.cat([xv_com[..., None, :], xv_u_vec], dim=-2).reshape(*bsT, 2, self.n, 2)
 
     def check_collision(self, x):
+        bs = x.shape[0]
         is_cld_0, is_cld_ij, dist_ij = self.check_ij_collision(x)
         is_cld_1, is_cld_bdry, dist_bdry = self.check_boundry_collision(x)
-        return torch.logical_or(is_cld_0, is_cld_1), is_cld_ij, is_cld_bdry, dist_ij, dist_bdry
+        is_cld_limit = torch.zeros(bs, 0, 2, dtype=torch.bool, device=x.device)
+        dist_limit = torch.zeros(bs, 0, 2).type_as(x)
+        return torch.logical_or(is_cld_0, is_cld_1), is_cld_ij, is_cld_bdry, is_cld_limit, dist_ij, dist_bdry, dist_limit
 
     def check_ij_collision(self, x):
         # x: (bs, n_o, 2) or (bs, n_o*n_p, 2)
@@ -150,7 +153,7 @@ class BouncingDisks(RigidBody):
         is_collide = is_collide_bdry.sum([1, 2]) > 0
         return is_collide, is_collide_bdry, dist_bdry
 
-    def cld_2did_to_1did(self, cld_ij_ids, cld_bdry_ids):
+    def cld_2did_to_1did(self, cld_ij_ids, cld_bdry_ids, cld_limit_ids):
         n_o = self.n_o
         i, j = cld_ij_ids.unbind(dim=1)
         ij_1d_ids = j + n_o*i - (i+1) * (i+2) // 2

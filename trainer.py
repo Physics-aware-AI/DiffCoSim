@@ -23,6 +23,7 @@ from datasets.datasets import RigidBodyDataset
 from systems.bouncing_mass_points import BouncingMassPoints
 from systems.bouncing_disks import BouncingDisks
 from systems.chain_pendulum_with_contact import ChainPendulum_w_Contact
+from systems.rope import Rope
 # from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
 # from find_bad_grad import BadGradFinder
@@ -45,12 +46,14 @@ class Model(pl.LightningModule):
         hparams = Namespace(**hparams) if type(hparams) is dict else hparams
         vars(hparams).update(**kwargs)
 
-        with open(os.path.join(THIS_DIR, "examples", hparams.body_kwargs_file+".json"), "r") as file:
-            body_kwargs = json.load(file)
-
-        body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, **body_kwargs)
+        if hparams.body_kwargs_file == "":
+            body = str_to_class(hparams.body_class)()
+        else:
+            with open(os.path.join(THIS_DIR, "examples", hparams.body_kwargs_file+".json"), "r") as file:
+                body_kwargs = json.load(file)
+            body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, **body_kwargs)
+            vars(hparams).update(**body_kwargs)
         vars(hparams).update(dt=body.dt, integration_time=body.integration_time)
-        vars(hparams).update(**body_kwargs)
 
         # load/generate data
         train_dataset = str_to_class(hparams.dataset_class)(
@@ -217,7 +220,7 @@ class Model(pl.LightningModule):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         # dataset 
         parser.add_argument("--body-class", type=str, default="BouncingMassPoints")
-        parser.add_argument("--body-kwargs-file", type=str, default="BM3_homo_cor1_mu0")
+        parser.add_argument("--body-kwargs-file", type=str, default="")
         parser.add_argument("--dataset-class", type=str, default="RigidBodyDataset")
         parser.add_argument("--n-train", type=int, default=800, help="number of train trajectories")
         parser.add_argument("--n-val", type=int, default=100, help="number of validation trajectories")
