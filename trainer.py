@@ -22,8 +22,9 @@ from datasets.datasets import RigidBodyDataset
 # from systems.gyroscope import Gyroscope
 from systems.bouncing_mass_points import BouncingMassPoints
 from systems.bouncing_disks import BouncingDisks
-from systems.chain_pendulum_with_contact import ChainPendulum_w_Contact
-from systems.rope import Rope
+from systems.chain_pendulum_with_contact import ChainPendulumWithContact
+from systems.rope_chain import Rope
+from systems.gyroscope_with_wall import GyroscopeWithWall
 # from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
 # from find_bad_grad import BadGradFinder
@@ -53,7 +54,11 @@ class Model(pl.LightningModule):
                 body_kwargs = json.load(file)
             body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, **body_kwargs)
             vars(hparams).update(**body_kwargs)
-        vars(hparams).update(dt=body.dt, integration_time=body.integration_time)
+        vars(hparams).update(
+            dt=body.dt, 
+            integration_time=body.integration_time,
+            is_homo=body.is_homo
+        )
 
         # load/generate data
         train_dataset = str_to_class(hparams.dataset_class)(

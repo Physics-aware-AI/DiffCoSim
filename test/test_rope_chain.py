@@ -4,7 +4,7 @@ PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PARENT_DIR)
 
 from datasets.datasets import RigidBodyDataset
-from systems.rope import Rope
+from systems.rope_chain import RopeChain
 from pytorch_lightning import seed_everything
 
 import torch
@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 plt.switch_backend("TkAgg")
 
 def test_rope_0():
-    body = Rope()
+    body = RopeChain()
     dataset = RigidBodyDataset(
         mode = "test",
         n_traj = 10,

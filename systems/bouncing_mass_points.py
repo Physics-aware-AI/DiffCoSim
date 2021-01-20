@@ -21,6 +21,7 @@ class BouncingMassPoints(RigidBody):
         mus=[0.0, 0.0, 0.0, 0.0], 
         cors=[0.0, 0.0, 0.0, 0.0],
         bdry_lin_coef=[[1, 0, 0], [0, 1, 0], [-1, 0, 1], [0, -1, 1]],
+        is_homo=False,
         dtype=torch.float64
     ):
         assert n_o == len(ms) == len(ls)
@@ -35,9 +36,15 @@ class BouncingMassPoints(RigidBody):
         self.n = self.n_o * self.n_p
         self.bdry_lin_coef = torch.tensor(bdry_lin_coef, dtype=torch.float64)
         self.n_c = n_o * (n_o - 1) // 2 + n_o * self.bdry_lin_coef.shape[0]
-        assert len(mus) == len(cors) == self.n_c
-        self.mus = torch.tensor(mus, dtype=torch.float64)
-        self.cors = torch.tensor(cors, dtype=torch.float64)
+        if is_homo:
+            assert len(mus) == len(cors) == 1
+            self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
+            self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
+        else:
+            assert len(mus) == len(cors) == self.n_c
+            self.mus = torch.tensor(mus, dtype=torch.float64)
+            self.cors = torch.tensor(cors, dtype=torch.float64)
+        self.is_homo = is_homo   
 
         self.impulse_solver = ImpulseSolver(
             dt = self.dt,
@@ -70,7 +77,7 @@ class BouncingMassPoints(RigidBody):
             x_list.append(x0[torch.logical_not(is_collide)])
             ptr += sum(torch.logical_not(is_collide))
         x0 = torch.cat(x_list, dim=0)[0:N]
-        x_dot0 = torch.randn(N, n, 2) * 0.2
+        x_dot0 = torch.randn(N, n, 2) 
         return torch.stack([x0, x_dot0], dim=1) # (N, 2, n, d) 
 
     def check_collision(self, x):

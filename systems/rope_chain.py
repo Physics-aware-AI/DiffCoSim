@@ -30,15 +30,10 @@ class Rope(RigidBody):
         dtype=torch.float64
     ):
         assert is_homo and n_o >= 2
-        self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=dtype)
         self.ls = torch.tensor(ls, dtype=dtype)
         self.radii = torch.tensor(radii, dtype=dtype)
-        self.body_graph.add_extended_body(0, ms[0], d=0, tether=(torch.zeros(2), ls[0]))
-        for i in range(1, n_o):
-            self.body_graph.add_extended_body(i, ms[i], d=0)
-            self.body_graph.add_edge(i-1, i, l=ls[i])
         self.g = g
         self.n_o, self.n_p, self.d = n_o, 1, 2
         self.n = self.n_o * self.n_p
@@ -48,6 +43,13 @@ class Rope(RigidBody):
         self.n_c = n_o - 1
         self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
         self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
+        self.is_homo = is_homo
+        
+        self.body_graph = BodyGraph()
+        self.body_graph.add_extended_body(0, ms[0], d=0, tether=(torch.zeros(2), ls[0]))
+        for i in range(1, n_o):
+            self.body_graph.add_extended_body(i, ms[i], d=0)
+            self.body_graph.add_edge(i-1, i, l=ls[i])
 
         self.impulse_solver = ImpulseSolver(
             dt = self.dt,

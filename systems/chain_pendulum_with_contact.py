@@ -8,7 +8,7 @@ from matplotlib import collections as mc
 from matplotlib.patches import Circle
 from models.impulse import ImpulseSolver
 
-class ChainPendulum_w_Contact(RigidBody):
+class ChainPendulumWithContact(RigidBody):
     dt = 0.01
     integration_time = 1.0
 
@@ -23,9 +23,11 @@ class ChainPendulum_w_Contact(RigidBody):
         mus=[0.0, 0.0, 0.0, 0.0], 
         cors=[1.0, 1.0, 1.0, 1.0], 
         bdry_lin_coef=[[1, 0, 1], [-1, 0, 1]],
+        is_homo=True,
         dtype=torch.float64
     ):
         assert n_o == len(ms) == len(ls) == len(radii)
+        assert is_homo
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=dtype)
@@ -41,9 +43,10 @@ class ChainPendulum_w_Contact(RigidBody):
 
         self.bdry_lin_coef = torch.tensor(bdry_lin_coef, dtype=dtype)
         self.n_c = n_o * self.bdry_lin_coef.shape[0]
-        assert len(mus) == len(cors) == self.n_c
-        self.mus = torch.tensor(mus, dtype=dtype)
-        self.cors = torch.tensor(cors, dtype=dtype)
+        assert len(mus) == len(cors) == 1
+        self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
+        self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
+        self.is_homo = is_homo
 
         self.impulse_solver = ImpulseSolver(
             dt = self.dt,

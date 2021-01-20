@@ -82,9 +82,9 @@ class BouncingDisks(RigidBody):
             r_list.append(r0[torch.logical_not(is_collide)])
             ptr += sum(torch.logical_not(is_collide))
         r0 = torch.cat(r_list, dim=0)[0:N]
-        r_dot0 = torch.randn(N, n_o, 2) * 0.2
+        r_dot0 = torch.randn(N, n_o, 2) 
         theta0 = torch.rand(N, n_o, 1) * 3.14 * 2
-        theta_dot0 = torch.randn(N, n_o, 1) * 0.1
+        theta_dot0 = torch.randn(N, n_o, 1) 
         r_theta0 = torch.cat([r0, theta0], dim=2)
         r_theta_dot0 = torch.cat([r_dot0, theta_dot0], dim=2)
         r_thetas = torch.stack([r_theta0, r_theta_dot0], dim=1) # (N, 2, n_o, 3)
