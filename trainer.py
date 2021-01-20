@@ -225,7 +225,7 @@ class Model(pl.LightningModule):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         # dataset 
         parser.add_argument("--body-class", type=str, default="BouncingMassPoints")
-        parser.add_argument("--body-kwargs-file", type=str, default="")
+        parser.add_argument("--body-kwargs-file", type=str, default="default")
         parser.add_argument("--dataset-class", type=str, default="RigidBodyDataset")
         parser.add_argument("--n-train", type=int, default=800, help="number of train trajectories")
         parser.add_argument("--n-val", type=int, default=100, help="number of validation trajectories")
