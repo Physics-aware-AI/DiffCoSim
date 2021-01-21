@@ -4,7 +4,7 @@ PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PARENT_DIR)
 
 from datasets.datasets import RigidBodyDataset
-from systems.rope_chain import RopeChain
+from systems.elastic_rope import ElasticRope
 from pytorch_lightning import seed_everything
 
 import torch
@@ -17,8 +17,8 @@ seed_everything(0)
 import matplotlib.pyplot as plt
 plt.switch_backend("TkAgg")
 
-def test_rope_chain_0():
-    body = RopeChain()
+def test_elastic_rope_0():
+    body = ElasticRope()
     dataset = RigidBodyDataset(
         mode = "test",
         n_traj = 10,
@@ -28,10 +28,10 @@ def test_rope_chain_0():
         regen=True
     )
 
-    ani = body.animate(dataset.zs, 8)
-    ani.save(os.path.join(THIS_DIR, 'test_rope_chain_0.gif'))
+    ani = body.animate(dataset.zs, 3)
+    ani.save(os.path.join(THIS_DIR, 'test_elastic_rope_0.gif'))
 
     assert 1
 
 if __name__ == "__main__":
-    test_rope_chain_0()
+    test_elastic_rope_0()

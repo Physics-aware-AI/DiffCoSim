@@ -23,7 +23,7 @@ from datasets.datasets import RigidBodyDataset
 from systems.bouncing_mass_points import BouncingMassPoints
 from systems.bouncing_disks import BouncingDisks
 from systems.chain_pendulum_with_contact import ChainPendulumWithContact
-from systems.rope_chain import Rope
+from systems.rope_chain import RopeChain
 from systems.gyroscope_with_wall import GyroscopeWithWall
 # from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC

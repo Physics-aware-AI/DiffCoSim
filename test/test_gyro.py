@@ -28,7 +28,7 @@ def test_gyro_0():
         body = body,
         dtype = torch.float32,
         chunk_len = 100,
-        regen=True
+        regen=False
     )
 
     N, T = dataset.zs.shape[:2]
@@ -39,7 +39,7 @@ def test_gyro_0():
     plt.plot(energy[3])
     plt.show()
 
-    ani = body.animate(dataset.zs, 3)
+    ani = body.animate(dataset.zs, 0)
     ani.save(os.path.join(THIS_DIR, 'test_gyro_0.gif'))
 
     assert 1

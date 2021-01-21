@@ -74,5 +74,24 @@ def test_BD5_0():
 
     assert 1
 
+def test_BD5_1():
+    body_kwargs_file = "BD5_hetero_g0"
+    with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
+        body_kwargs = json.load(file)
+    body = BouncingDisks(body_kwargs_file, **body_kwargs)
+    dataset = RigidBodyDataset(
+        mode = "train",
+        n_traj = 800,
+        body = body,
+        dtype = torch.float32,
+        chunk_len = 61,
+        regen=False
+    )
+
+    ani = body.animate(dataset.zs, 403)
+    ani.save(os.path.join(THIS_DIR, 'test_BD5_1.gif'))
+
+    assert 1
+
 if __name__ == "__main__":
-    test_BD5_0()
+    test_BD5_1()

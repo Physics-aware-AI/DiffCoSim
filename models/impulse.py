@@ -15,7 +15,7 @@ class ImpulseSolver(nn.Module):
         self, dt, n_o, n_p, d, 
         check_collision, cld_2did_to_1did, DPhi,  
         ls, bdry_lin_coef, delta=None, 
-        get_limit_e_div_l=None,
+        get_limit_e_for_Jac=None,
         get_3d_contact_point_c_tilde=None,
         save_dir=os.path.join(PARENT_DIR, "tensors")
     ):
@@ -35,7 +35,7 @@ class ImpulseSolver(nn.Module):
             self.delta = None
         else:
             self.register_buffer("delta", delta)
-        self.get_limit_e_div_l = get_limit_e_div_l
+        self.get_limit_e_for_Jac = get_limit_e_for_Jac
         self.get_3d_contact_point_c_tilde = get_3d_contact_point_c_tilde
         self.save_dir = save_dir
 
@@ -50,7 +50,7 @@ class ImpulseSolver(nn.Module):
             return xv, is_cld
         # for the rope tasks
         if is_cld_limit.shape[1] > 0:
-            self.e_n_limit_div_l, self.e_t_limit_div_l = self.get_limit_e_div_l(x)
+            self.e_n_limit_for_Jac, self.e_t_limit_for_Jac = self.get_limit_e_for_Jac(x)
         # specifically for the gyroscope task
         if self.get_3d_contact_point_c_tilde is not None:
             self.contact_c_tilde = self.get_3d_contact_point_c_tilde(x)
@@ -140,16 +140,42 @@ class ImpulseSolver(nn.Module):
                 Jac[n_cld_ij+cid, 1, i, :] = - c_til_bdry_1[cid, :, None] * e_t_bdry[cid, None, :]
             # limited support for the constraint type "limit"
             for cid, (i_limit, t_limit) in enumerate(cld_limit_ids):
-                if t_limit == 0:
-                    Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit] += self.e_n_limit_div_l[bs_idx, i_limit, None, :]
-                    Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit+1] += - self.e_n_limit_div_l[bs_idx, i_limit+1, None, :]
-                    Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit] += self.e_t_limit_div_l[bs_idx, i_limit, None, :]
-                    Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit+1] += - self.e_t_limit_div_l[bs_idx, i_limit+1, None, :]
-                else:
-                    Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit] += - self.e_n_limit_div_l[bs_idx, i_limit, None, :]
-                    Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit+1] += self.e_n_limit_div_l[bs_idx, i_limit+1, None, :]
-                    Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit] += - self.e_t_limit_div_l[bs_idx, i_limit, None, :]
-                    Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit+1] += self.e_t_limit_div_l[bs_idx, i_limit+1, None, :]
+                if i_limit < n_o - 1: # bending constraint
+                    if t_limit == 0: # angle of the latter link is large
+                        if i_limit >= 1:
+                            Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit-1] = - self.e_n_limit_for_Jac[bs_idx, i_limit, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit] = self.e_n_limit_for_Jac[bs_idx, i_limit, None, :] + self.e_n_limit_for_Jac[bs_idx, i_limit+1, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit+1] = - self.e_n_limit_for_Jac[bs_idx, i_limit+1, None, :]
+                        if i_limit >= 1:
+                            Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit-1] = - self.e_t_limit_for_Jac[bs_idx, i_limit, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit] = self.e_t_limit_for_Jac[bs_idx, i_limit, None, :] + self.e_t_limit_for_Jac[bs_idx, i_limit+1, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit+1] = - self.e_t_limit_for_Jac[bs_idx, i_limit+1, None, :]
+                    else: # angle fo the former link is large
+                        if i_limit >= 1:
+                            Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit-1] = self.e_n_limit_for_Jac[bs_idx, i_limit, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit] = - self.e_n_limit_for_Jac[bs_idx, i_limit, None, :] - self.e_n_limit_for_Jac[bs_idx, i_limit+1, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit+1] = self.e_n_limit_for_Jac[bs_idx, i_limit+1, None, :]
+                        if i_limit >= 1:
+                            Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit-1] = self.e_t_limit_for_Jac[bs_idx, i_limit, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit] = - self.e_t_limit_for_Jac[bs_idx, i_limit, None, :] - self.e_t_limit_for_Jac[bs_idx, i_limit+1, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit+1] = self.e_t_limit_for_Jac[bs_idx, i_limit+1, None, :]
+                else: # stretching constraint
+                    i_limit_offset = i_limit - (n_o-1)
+                    if t_limit == 0: # maximum stretch
+                        if i_limit_offset >= 1:
+                            Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit_offset-1] = self.e_n_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit_offset] = - self.e_n_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
+                        if i_limit_offset >= 1:
+                            Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit_offset-1] = self.e_t_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit_offset] = - self.e_t_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
+                    else: # minimum stretch
+                        if i_limit_offset >= 1:
+                            Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit_offset-1] = - self.e_n_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 0, i_limit_offset] = self.e_n_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
+                        if i_limit_offset >= 1:
+                            Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit_offset-1] = - self.e_t_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
+                        Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit_offset] = self.e_t_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
+                    
             return Jac
         elif d == 3:
             e_n_bdry = torch.tensor([[0, -1, 0]]).type_as(x) # (3)
@@ -223,8 +249,13 @@ class ImpulseSolver(nn.Module):
                 A_decom, Jac_v, mu, n_cld, d
             )
         except SolverError as e:
-            self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
-            impulse = torch.zeros(n_cld*d, 1).type_as(v)
+            try:
+                impulse = self.solve_compression_impulse_w_penalty(
+                    A_decom, Jac_v, mu, n_cld, d
+                )
+            except SolverError as e:
+                self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
+                impulse = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after compression phase (before retitution phase)
         M_hat_inv = L_V_s @ L_V_s.t() #(n*d, n*d)
         M_hat_inv_Jac_T = M_hat_inv @ Jac.reshape(n_cld*d, n*d).t() # (n*d, n_cld*d)
@@ -238,8 +269,13 @@ class ImpulseSolver(nn.Module):
                 A_decom, Jac_v_prev_r, v_star_c, mu, n_cld, d, target_impulse=target_impulse
             )
         except SolverError as e:
-            self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
-            impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
+            try:
+                impulse_star_r = self.solve_restitution_impulse_w_penalty(
+                    A_decom, Jac_v_prev_r, v_star_c, mu, n_cld, d, target_impulse=target_impulse
+                )
+            except SolverError as e:
+                self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
+                impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after restitution phase, compensate penetration
         dv_rest = (M_hat_inv_Jac_T @ impulse_star_r).reshape(n, d)
         dv = torch.zeros_like(v)
@@ -261,7 +297,6 @@ class ImpulseSolver(nn.Module):
             v_right = J_e.t() @ torch.solve(J_e_J_T__J_J_T__inv_v_star, J_e @ J_e.t())[0]
             v_star_c = v_star.reshape(n_cld*d, 1) - J @ v_right
         return v_star_c
-
     def get_dv_wo_J_e(self, bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor):
         n_cld, d, n_o, n_p, _ = Jac.shape
         n = n_o * n_p
@@ -272,9 +307,25 @@ class ImpulseSolver(nn.Module):
         # make sure v_star is "valid", avoid unbounded cvx problem
         if n_cld > n: # Jac is a tall matrix
             # v_star_c = J (J_T J)^-1 J_T v_star
-            v_star_euc = Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1) # (n*d, 1)
-            v_star_euc = torch.solve(v_star_euc, Jac.reshape(n_cld*d, n*d).t() @ Jac.reshape(n_cld*d, n*d))[0]
-            v_star_c = Jac.reshape(n_cld*d, n*d) @ v_star_euc
+            try:
+                v_star_euc = Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1) # (n*d, 1)
+                v_star_euc = torch.solve(v_star_euc, Jac.reshape(n_cld*d, n*d).t() @ Jac.reshape(n_cld*d, n*d))[0]
+                v_star_c = Jac.reshape(n_cld*d, n*d) @ v_star_euc
+            except RuntimeError as e:
+                Q, R = torch.qr(Jac.reshape(n_cld*d, n*d), some=True)
+                # Q: (n_cld*d, n*d), R: (n*d, n*d)
+                idx_list = [0] ; ptr = 0
+                while ptr < n-1:
+                    for ptr_r in range(ptr+1,n*d):
+                        if R[len(idx_list), ptr_r] != 0:
+                            idx_list.append(ptr_r)
+                            ptr = ptr_r
+                            break
+                Jac_full_rank = Q @ R[:, idx_list]
+                v_star_euc = Jac_full_rank.t() @ v_star.reshape(n_cld*d, 1)
+                v_star_euc = torch.solve(v_star_euc, Jac_full_rank.t() @ Jac_full_rank)[0]
+                v_star_c = Jac_full_rank @ v_star_euc
+                print("performed QR decomposition")
         else:
             v_star_c = v_star
         # compression phase impulse
@@ -283,8 +334,13 @@ class ImpulseSolver(nn.Module):
                 A_decom, Jac_v, mu, n_cld, d
             )
         except SolverError as e:
-            self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
-            impulse = torch.zeros(n_cld*d, 1).type_as(v)
+            try:
+                impulse = self.solve_compression_impulse_w_penalty(
+                    A_decom, Jac_v, mu, n_cld, d
+                )
+            except SolverError as e:
+                self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+                impulse = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after compression phase (before retitution phase)
         Minv_Jac_T = (Minv @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
         dv_comp = (Minv_Jac_T @ impulse).reshape(n, d)
@@ -297,8 +353,13 @@ class ImpulseSolver(nn.Module):
                 A_decom, Jac_v_prev_r, v_star_c, mu, n_cld, d, target_impulse=target_impulse
             )
         except SolverError as e:
-            self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
-            impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
+            try:
+                impulse_star_r = self.solve_restitution_impulse_w_penalty(
+                    A_decom, Jac_v_prev_r, v_star_c, mu, n_cld, d, target_impulse=target_impulse
+                )
+            except:
+                self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+                impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after restitution phase
         dv_rest = (Minv_Jac_T @ impulse_star_r).reshape(n, d)
         dv = torch.zeros_like(v)
@@ -326,6 +387,28 @@ class ImpulseSolver(nn.Module):
         )
         return impulse
 
+    def solve_compression_impulse_w_penalty(self, A_decom, v_, mu, n_cld, d):
+        # v_: (n_cld*d, 1)
+        n_cld_d = v_.shape[0]
+        f = cp.Variable((n_cld_d, 1))
+        A_decom_p = cp.Parameter(A_decom.shape) # Todo
+        v_p = cp.Parameter((n_cld_d, 1))
+        mu_p = cp.Parameter((mu.shape[0], 1)) 
+
+        objective = cp.Minimize(0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p))) + \
+                        0.1 * cp.sum_squares(f)
+        constraints = [cp.SOC(cp.multiply(mu_p[i], f[i*d]), f[i*d+1:i*d+d]) for i in range(n_cld)] + \
+                        [f[i*d] >= 0 for i in range(n_cld)]
+        problem = cp.Problem(objective, constraints)
+        cvxpylayer = CvxpyLayer(problem, parameters=[A_decom_p, v_p, mu_p], variables=[f])
+
+        impulse, = cvxpylayer(
+            A_decom, 
+            v_.reshape(-1, 1), 
+            mu.reshape(-1, 1), 
+        )
+        return impulse
+
     def solve_restitution_impulse(self, A_decom, v_, v_star, mu, n_cld, d, target_impulse):
         # v_: (n_cld*d, 1)
         n_cld_d = v_.shape[0]
@@ -337,6 +420,33 @@ class ImpulseSolver(nn.Module):
         target_impulse_p = cp.Parameter((n_cld, 1))
 
         objective = cp.Minimize(0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p)) - cp.sum(cp.multiply(f, v_star_p)))
+        # the second line is to avoid negative target_impulse due to numerical error
+        constraints = [cp.SOC(cp.multiply(mu_p[i], f[i*d]), f[i*d+1:i*d+d]) for i in range(n_cld)] + \
+                        [f[i*d] >= 0 for i in range(n_cld)] + \
+                        [f[i*d] >= target_impulse_p[i] for i in range(n_cld)]
+        problem = cp.Problem(objective, constraints)
+        cvxpylayer = CvxpyLayer(problem, parameters=[A_decom_p, v_p, v_star_p, mu_p, target_impulse_p], variables=[f])
+        impulse_star, = cvxpylayer(
+            A_decom, 
+            v_.reshape(-1, 1), 
+            v_star.reshape(-1, 1), 
+            mu.reshape(-1, 1), 
+            target_impulse.reshape(-1, 1)
+        )
+        return impulse_star
+
+    def solve_restitution_impulse_w_penalty(self, A_decom, v_, v_star, mu, n_cld, d, target_impulse):
+        # v_: (n_cld*d, 1)
+        n_cld_d = v_.shape[0]
+        f = cp.Variable((n_cld_d, 1))
+        A_decom_p = cp.Parameter(A_decom.shape) # Todo
+        v_p = cp.Parameter((n_cld_d, 1))
+        v_star_p = cp.Parameter((n_cld_d, 1))
+        mu_p = cp.Parameter((mu.shape[0], 1)) 
+        target_impulse_p = cp.Parameter((n_cld, 1))
+
+        objective = cp.Minimize(0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p)) - cp.sum(cp.multiply(f, v_star_p))) + \
+                        0.1 * cp.sum_squares(f)
         # the second line is to avoid negative target_impulse due to numerical error
         constraints = [cp.SOC(cp.multiply(mu_p[i], f[i*d]), f[i*d+1:i*d+d]) for i in range(n_cld)] + \
                         [f[i*d] >= 0 for i in range(n_cld)] + \

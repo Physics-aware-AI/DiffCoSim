@@ -103,12 +103,13 @@ class GyroscopeWithWall(RigidBody):
 
     def get_bdry_cld_and_c_tilde(self, x):
         bdry_lin_coef = self.bdry_lin_coef.type_as(x)
+        delta = self.delta.type_as(x)
         # get the position of the mesh points on the rim of the cone
         assert x.ndim == 3
         bs = x.shape[0]
         x = x.reshape(bs, 1, 4, 3)
         com = x[:, :, 0] # (bs, 1, 3)
-        e = self.delta @ x # (bs, 1, 3, 3)
+        e = delta @ x # (bs, 1, 3, 3)
         angles = torch.linspace(0, 6.28, 21)
         mesh_points = torch.stack(
             [e[:,:,0]*self.radius*a.cos() + e[:,:,1]*self.radius*a.sin() + com+e[:,:,2]*self.offset for a in angles][:-1],
