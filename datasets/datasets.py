@@ -35,14 +35,14 @@ class RigidBodyDataset(Dataset):
         seed_everything(0)
         ts, zs, is_clds = self.chunk_training_data(ts, zs, is_clds, chunk_len)
 
-        self.ts, self.zs = ts.to(dtype=dtype), zs.to(dtype=dtype)
+        self.ts, self.zs, self.is_clds = ts.to(dtype=dtype), zs.to(dtype=dtype), is_clds
         print(f"{is_clds.sum()} out of {len(is_clds)} trajectories contains collision.")
     
     def __len__(self):
         return self.zs.shape[0]
 
     def __getitem__(self, idx):
-        return (self.zs[idx, 0], self.ts[idx]), self.zs[idx]
+        return (self.zs[idx, 0], self.ts[idx]), self.zs[idx], self.is_clds[idx]
 
     def generate_trajectory_data(self, n_traj):
         """

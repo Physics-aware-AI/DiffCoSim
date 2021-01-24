@@ -12,15 +12,15 @@ PI = 3.1415927410125732
 
 class RopeChain(RigidBody):
     dt = 0.005
-    integration_time = 0.5
+    integration_time = 0.1
 
     def __init__(
         self, 
         kwargs_file_name="default",
-        n_o=3, 
+        n_o=10, 
         g=9.81,
-        ms=[0.1]*3, 
-        ls=[0.05]*3, 
+        ms=[0.1]*10, 
+        ls=[0.05]*10, 
         radii=[0.01], 
         mus=[0.0], 
         cors=[0.0], 

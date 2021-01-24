@@ -12,7 +12,7 @@ PI = 3.1415927410125732
 
 class ElasticRope(RigidBody):
     dt = 0.005
-    integration_time = 0.5
+    integration_time = 0.1
 
     def __init__(
         self, 

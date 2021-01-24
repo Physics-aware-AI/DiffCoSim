@@ -17,8 +17,8 @@ class Animation():
         xyzmax = self.qt.max(0).max(0)
         delta = xyzmax - xyzmin
         lower = xyzmin - 0.1 * delta; upper = xyzmax + 0.1 * delta
-        # self.ax.set_xlim((min(lower), max(upper)))
-        # self.ax.set_ylim((min(lower), max(upper)))
+        self.ax.set_xlim((min(lower), max(upper)))
+        self.ax.set_ylim((min(lower), max(upper)))
         if d==3: self.ax.set_zlim((min(lower), max(upper)))
         if d!=3: self.ax.set_aspect("equal")
 

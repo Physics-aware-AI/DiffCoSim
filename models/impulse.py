@@ -283,20 +283,22 @@ class ImpulseSolver(nn.Module):
         return dv
 
     def get_v_star_c_w_J_e(self, n_cld, n, d, v_star, J, J_e):
-        if n_cld > n:
-            # (J J_T - J J_e_T (J_e J_e_T)^-1 J_e J_T) * v_star
-            J_T_v_star = J.t() @ v_star.reshape(n_cld*d, 1)
-            J_T_J__inv_J_T_v_star = torch.solve(J_T_v_star, J.t() @ J)[0]
-            J_e__J_T_J__inv_J_T_v_star = J_e @ J_T_J__inv_J_T_v_star
-            v_right = J_e.t() @ torch.solve(J_e__J_T_J__inv_J_T_v_star, J_e @ J_e.t())[0]
-            v_star_c = J @ (J_T_J__inv_J_T_v_star - v_right)
-        else:
-            J_J_T__inv_v_star = torch.solve(v_star.reshape(n_cld*d, 1), J @ J.t())[0]
-            J_T__J_J_T__inv_v_star = J.t() @ J_J_T__inv_v_star
-            J_e_J_T__J_J_T__inv_v_star = J_e @ J_T__J_J_T__inv_v_star
-            v_right = J_e.t() @ torch.solve(J_e_J_T__J_J_T__inv_v_star, J_e @ J_e.t())[0]
-            v_star_c = v_star.reshape(n_cld*d, 1) - J @ v_right
-        return v_star_c
+        with torch.no_grad():
+            if n_cld > n:
+                # (J J_T - J J_e_T (J_e J_e_T)^-1 J_e J_T) * v_star
+                J_T_v_star = J.t() @ v_star.reshape(n_cld*d, 1)
+                J_T_J__inv_J_T_v_star = torch.solve(J_T_v_star, J.t() @ J)[0]
+                J_e__J_T_J__inv_J_T_v_star = J_e @ J_T_J__inv_J_T_v_star
+                v_right = J_e.t() @ torch.solve(J_e__J_T_J__inv_J_T_v_star, J_e @ J_e.t())[0]
+                v_star_c = J @ (J_T_J__inv_J_T_v_star - v_right)
+            else:
+                J_J_T__inv_v_star = torch.solve(v_star.reshape(n_cld*d, 1), J @ J.t())[0]
+                J_T__J_J_T__inv_v_star = J.t() @ J_J_T__inv_v_star
+                J_e_J_T__J_J_T__inv_v_star = J_e @ J_T__J_J_T__inv_v_star
+                v_right = J_e.t() @ torch.solve(J_e_J_T__J_J_T__inv_v_star, J_e @ J_e.t())[0]
+                v_star_c = v_star.reshape(n_cld*d, 1) - J @ v_right
+            return v_star_c
+
     def get_dv_wo_J_e(self, bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor):
         n_cld, d, n_o, n_p, _ = Jac.shape
         n = n_o * n_p
@@ -305,29 +307,31 @@ class ImpulseSolver(nn.Module):
         Minv_sqrt_Jac_T = (Minv_sqrt @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
         A_decom = Minv_sqrt_Jac_T
         # make sure v_star is "valid", avoid unbounded cvx problem
-        if n_cld > n: # Jac is a tall matrix
-            # v_star_c = J (J_T J)^-1 J_T v_star
-            try:
-                v_star_euc = Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1) # (n*d, 1)
-                v_star_euc = torch.solve(v_star_euc, Jac.reshape(n_cld*d, n*d).t() @ Jac.reshape(n_cld*d, n*d))[0]
-                v_star_c = Jac.reshape(n_cld*d, n*d) @ v_star_euc
-            except RuntimeError as e:
-                Q, R = torch.qr(Jac.reshape(n_cld*d, n*d), some=True)
-                # Q: (n_cld*d, n*d), R: (n*d, n*d)
-                idx_list = [0] ; ptr = 0
-                while ptr < n-1:
-                    for ptr_r in range(ptr+1,n*d):
-                        if R[len(idx_list), ptr_r] != 0:
-                            idx_list.append(ptr_r)
-                            ptr = ptr_r
-                            break
-                Jac_full_rank = Q @ R[:, idx_list]
-                v_star_euc = Jac_full_rank.t() @ v_star.reshape(n_cld*d, 1)
-                v_star_euc = torch.solve(v_star_euc, Jac_full_rank.t() @ Jac_full_rank)[0]
-                v_star_c = Jac_full_rank @ v_star_euc
-                print("performed QR decomposition")
-        else:
-            v_star_c = v_star
+        with torch.no_grad():
+            if n_cld > n: # Jac is a tall matrix
+                # v_star_c = J (J_T J)^-1 J_T v_star
+                try:
+                    v_star_euc = Jac.reshape(n_cld*d, n*d).t() @ v_star.reshape(n_cld*d, 1) # (n*d, 1)
+                    v_star_euc = torch.solve(v_star_euc, Jac.reshape(n_cld*d, n*d).t() @ Jac.reshape(n_cld*d, n*d))[0]
+                    v_star_c = Jac.reshape(n_cld*d, n*d) @ v_star_euc
+                except RuntimeError as e:
+                    # https://math.stackexchange.com/questions/748500/how-to-find-linearly-independent-columns-in-a-matrix
+                    Q, R = torch.qr(Jac.reshape(n_cld*d, n*d), some=True)
+                    # Q: (n_cld*d, n*d), R: (n*d, n*d)
+                    idx_list = [0] ; ptr = 0
+                    while ptr < n-1:
+                        for ptr_r in range(ptr+1,n*d):
+                            if R[len(idx_list), ptr_r] != 0:
+                                idx_list.append(ptr_r)
+                                ptr = ptr_r
+                                break
+                    Jac_full_rank = Q @ R[:, idx_list]
+                    v_star_euc = Jac_full_rank.t() @ v_star.reshape(n_cld*d, 1)
+                    v_star_euc = torch.solve(v_star_euc, Jac_full_rank.t() @ Jac_full_rank)[0]
+                    v_star_c = Jac_full_rank @ v_star_euc
+                    # print("performed QR decomposition")
+            else:
+                v_star_c = v_star
         # compression phase impulse
         try:
             impulse = self.solve_compression_impulse(
@@ -395,8 +399,9 @@ class ImpulseSolver(nn.Module):
         v_p = cp.Parameter((n_cld_d, 1))
         mu_p = cp.Parameter((mu.shape[0], 1)) 
 
-        objective = cp.Minimize(0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p))) + \
-                        0.1 * cp.sum_squares(f)
+        objective = cp.Minimize(
+            0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p)) + 0.1 * cp.sum_squares(f)
+        )
         constraints = [cp.SOC(cp.multiply(mu_p[i], f[i*d]), f[i*d+1:i*d+d]) for i in range(n_cld)] + \
                         [f[i*d] >= 0 for i in range(n_cld)]
         problem = cp.Problem(objective, constraints)
@@ -445,8 +450,9 @@ class ImpulseSolver(nn.Module):
         mu_p = cp.Parameter((mu.shape[0], 1)) 
         target_impulse_p = cp.Parameter((n_cld, 1))
 
-        objective = cp.Minimize(0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p)) - cp.sum(cp.multiply(f, v_star_p))) + \
-                        0.1 * cp.sum_squares(f)
+        objective = cp.Minimize(
+            0.5 * cp.sum_squares(A_decom_p @ f) + cp.sum(cp.multiply(f, v_p)) - cp.sum(cp.multiply(f, v_star_p)) + 0.1 * cp.sum_squares(f)
+        )
         # the second line is to avoid negative target_impulse due to numerical error
         constraints = [cp.SOC(cp.multiply(mu_p[i], f[i*d]), f[i*d+1:i*d+d]) for i in range(n_cld)] + \
                         [f[i*d] >= 0 for i in range(n_cld)] + \

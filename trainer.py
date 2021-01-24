@@ -24,6 +24,7 @@ from systems.bouncing_mass_points import BouncingMassPoints
 from systems.bouncing_disks import BouncingDisks
 from systems.chain_pendulum_with_contact import ChainPendulumWithContact
 from systems.rope_chain import RopeChain
+from systems.elastic_rope import ElasticRope
 from systems.gyroscope_with_wall import GyroscopeWithWall
 # from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
@@ -127,34 +128,41 @@ class Model(pl.LightningModule):
         return (pred_zts - true_zts).abs().mean()
 
     def training_step(self, batch, batch_idx):
-        (z0, ts), zts = batch
+        (z0, ts), zts, is_clds = batch
         ts = ts[0] - ts[0,0]
-        # integrate 
-        pred_zts = self.model.integrate(z0, ts, tol=self.hparams.tol, method=self.hparams.solver)
-        # MAE error
-        loss = self.traj_mae(pred_zts, zts)
+        if not self.hparams.train_separate:
+            pred_zts = self.model.integrate(z0, ts, tol=self.hparams.tol, method=self.hparams.solver)
+            loss = self.traj_mae(pred_zts, zts)
+        else:
+            if self.current_epoch > self.hparams.mu_cor_start_epoch and self.current_epoch % 2: # train mu cor
+                self.set_requires_grad(train_mu_cor=True, train_m_V=False)
+                inds = torch.nonzero(is_clds, as_tuple=False)[:, 0]
+            else: # train m and V
+                self.set_requires_grad(train_mu_cor=False, train_m_V=True)
+                inds = torch.nonzero(torch.logical_not(is_clds), as_tuple=False)[:, 0]
+            if len(inds) > 0:
+                pred_zts = self.model.integrate(z0[inds], ts, tol=self.hparams.tol, method=self.hparams.solver)
+                loss = self.traj_mae(pred_zts, zts[inds])
+            else:
+                return None
+
         logs = {"train/loss": loss, "train/nfe": self.model.nfe}
         self.log("train/loss", loss, prog_bar=True)
         self.log("train/nfe", self.model.nfe, prog_bar=True)
-        # self.bad_grad_finder = BadGradFinder()
-        # self.bad_grad_finder.register_hooks(loss)
-        # self.loss = loss
         return loss
 
-    # def on_after_backward(self):
-    #     # loss 
-    #     self.bad_grad_finder.make_dot(self.loss)
-
-    # def on_train_batch_end(self, outputs, batch, batch_idx, dataloader_idx):
-    #     self.bad_grad_finder.dot.save(
-    #         os.path.join(self.logger[0].log_dir, f"epoch{self.current_epoch}_batch{batch_idx}.dot")
-    #     )
-    #     self.bad_grad_finder.delete()
-    #     del self.bad_grad_finder
+    def set_requires_grad(self, train_mu_cor, train_m_V):
+        self.model.mu_params.requires_grad = train_mu_cor
+        self.model.cor_params.requires_grad = train_mu_cor
+        for param in self.model.V_net.parameters():
+            param.requires_grad = train_m_V
+        for param in self.model.m_params.parameters():
+            param.requires_grad = train_m_V
 
     def test_step(self, batch, batch_idx):
-        (z0, _), _ = batch
-        ts = torch.arange(0.0, self.body.integration_time, self.hparams.dt).type_as(z0)
+        (z0, _), _, _ = batch
+        integration_time = max(self.body.integration_time, self.body.dt*100)
+        ts = torch.arange(0.0, integration_time, self.body.dt).type_as(z0)
         pred_zts = self.model.integrate(z0, ts, method='rk4')
         true_zts, _ = self.body.integrate(z0, ts, method='rk4') # (bs, T, 2, n, d)
 
@@ -237,6 +245,8 @@ class Model(pl.LightningModule):
         parser.add_argument("--optimizer-class", type=str, default="AdamW")
         parser.add_argument("--weight-decay", type=float, default=1e-4)
         parser.add_argument("--SGDR", action="store_true", default=False)
+        parser.add_argument("--train-separate", action="store_true", default=False)
+        parser.add_argument("--mu-cor-start-epoch", type=int, default=0)
         # model
         parser.add_argument("--hidden-size", type=int, default=256, help="number of hidden units")
         parser.add_argument("--num-layers", type=int, default=3, help="number of hidden layers")
@@ -258,7 +268,7 @@ if __name__ == "__main__":
     model = Model(hparams)
 
     savedir = os.path.join(".", "logs", 
-                          hparams.body_kwargs_file + f"_N{hparams.n_train}")
+                          hparams.body_kwargs_file + f"_{hparams.network_class}" + f"_N{hparams.n_train}")
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=savedir, name='')
 
     checkpoint = ModelCheckpoint(monitor="train/loss",
