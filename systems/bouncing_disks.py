@@ -6,6 +6,7 @@ from utils import Animation
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
 from models.impulse import ImpulseSolver
+from models.impulse_mujoco import ImpulseSolverMujoco
 
 class BouncingDisks(RigidBody):
     dt = 0.01
@@ -22,6 +23,7 @@ class BouncingDisks(RigidBody):
         cors=[0.0, 0.0, 0.0, 0.0],
         bdry_lin_coef=[[1, 0, 0], [0, 1, 0], [-1, 0, 1], [0, -1, 1]],
         is_homo=False,
+        is_mujoco_like=False,
         dtype=torch.float64        
     ):
         assert n_o == len(ms) == len(ls)
@@ -46,24 +48,42 @@ class BouncingDisks(RigidBody):
             self.mus = torch.tensor(mus, dtype=torch.float64)
             self.cors = torch.tensor(cors, dtype=torch.float64)
         self.is_homo = is_homo
+        self.is_mujoco_like = is_mujoco_like
 
         delta = torch.tensor([[-1, 1, 0], [-1, 0, 1]], dtype=torch.float64) # 2, 3
 
-        self.impulse_solver = ImpulseSolver(
-            dt = self.dt,
-            n_o = self.n_o,
-            n_p = self.n_p,
-            d = self.d,
-            ls = self.ls,
-            bdry_lin_coef = self.bdry_lin_coef,
-            check_collision = self.check_collision,
-            cld_2did_to_1did = self.cld_2did_to_1did,
-            DPhi = self.DPhi,
-            delta=delta
-        )
+        if not is_mujoco_like:
+            self.impulse_solver = ImpulseSolver(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = self.ls,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi,
+                delta=delta
+            )
+        else:
+            self.impulse_solver = ImpulseSolverMujoco(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = self.ls,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi,
+                delta=delta
+            )
 
     def __str__(self):
-        return f"{self.__class__.__name__}{self.kwargs_file_name}"
+        if self.is_mujoco_like:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}_mujoco"
+        else:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, x):
         # x: (bs, n, d)

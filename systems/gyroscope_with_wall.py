@@ -5,6 +5,7 @@ from pytorch_lightning import seed_everything
 import numpy as np
 import torch
 import networkx as nx
+from models.impulse_mujoco import ImpulseSolverMujoco
 
 class GyroscopeWithWall(RigidBody):
     dt = 0.02
@@ -24,6 +25,7 @@ class GyroscopeWithWall(RigidBody):
         is_homo=True,
         offset=0.0,
         radius=0.3,
+        is_mujoco_like=False,
         dtype=torch.float64
     ):
         self.body_graph = BodyGraph()
@@ -41,27 +43,46 @@ class GyroscopeWithWall(RigidBody):
         self.mus = torch.tensor(mus, dtype=torch.float64)
         self.cors = torch.tensor(cors, dtype=torch.float64)
         self.is_homo = is_homo
+        self.is_mujoco_like = is_mujoco_like
 
         self.delta = torch.tensor([[-1, 1, 0, 0], [-1, 0, 1, 0], [-1, 0, 0, 1]], dtype=torch.float64) # 3, 4
         self.offset = offset
         self.radius = radius
 
-        self.impulse_solver = ImpulseSolver(
-            dt = self.dt,
-            n_o = self.n_o,
-            n_p = self.n_p,
-            d = self.d,
-            ls = None,
-            bdry_lin_coef = self.bdry_lin_coef,
-            check_collision = self.check_collision,
-            cld_2did_to_1did = self.cld_2did_to_1did,
-            DPhi = self.DPhi,
-            delta=self.delta,
-            get_3d_contact_point_c_tilde=self.get_3d_contact_point_c_tilde
-        )
+        if not is_mujoco_like:
+            self.impulse_solver = ImpulseSolver(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = None,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi,
+                delta=self.delta,
+                get_3d_contact_point_c_tilde=self.get_3d_contact_point_c_tilde
+            )
+        else:
+            self.impulse_solver = ImpulseSolverMujoco(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = None,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi,
+                delta=self.delta,
+                get_3d_contact_point_c_tilde=self.get_3d_contact_point_c_tilde
+            )
 
     def __str__(self):
-        return f"{self.__class__.__name__}{self.kwargs_file_name}"
+        if self.is_mujoco_like:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}_mujoco"
+        else:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, r):
         M = self.M.to(dtype=r.dtype)

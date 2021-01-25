@@ -7,6 +7,7 @@ import networkx as nx
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
 from models.impulse import ImpulseSolver
+from models.impulse_mujoco import ImpulseSolverMujoco
 
 PI = 3.1415927410125732
 
@@ -27,6 +28,7 @@ class RopeChain(RigidBody):
         bdry_lin_coef=[[0, 0, 0]],
         angle_limit=0.3,
         is_homo=True,
+        is_mujoco_like=False,
         dtype=torch.float64
     ):
         assert is_homo and n_o >= 2
@@ -44,6 +46,7 @@ class RopeChain(RigidBody):
         self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
         self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
         self.is_homo = is_homo
+        self.is_mujoco_like = is_mujoco_like
         
         self.body_graph = BodyGraph()
         self.body_graph.add_extended_body(0, ms[0], d=0, tether=(torch.zeros(2), ls[0]))
@@ -51,22 +54,39 @@ class RopeChain(RigidBody):
             self.body_graph.add_extended_body(i, ms[i], d=0)
             self.body_graph.add_edge(i-1, i, l=ls[i])
 
-        self.impulse_solver = ImpulseSolver(
-            dt = self.dt,
-            n_o = self.n_o,
-            n_p = self.n_p,
-            d = self.d,
-            ls = self.ls,
-            bdry_lin_coef = self.bdry_lin_coef,
-            check_collision = self.check_collision,
-            cld_2did_to_1did = self.cld_2did_to_1did,
-            DPhi = self.DPhi,
-            get_limit_e_for_Jac=self.get_limit_e_for_Jac
-        )        
+        if not is_mujoco_like:
+            self.impulse_solver = ImpulseSolver(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = self.ls,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi,
+                get_limit_e_for_Jac=self.get_limit_e_for_Jac
+            )        
+        else:
+            self.impulse_solver = ImpulseSolverMujoco(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = self.ls,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi,
+                get_limit_e_for_Jac=self.get_limit_e_for_Jac
+            )   
 
 
     def __str__(self):
-        return f"{self.__class__.__name__}{self.kwargs_file_name}"
+        if self.is_mujoco_like:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}_mujoco"
+        else:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, x):
         M = self.M.to(dtype=x.dtype)

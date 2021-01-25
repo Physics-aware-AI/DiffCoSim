@@ -7,6 +7,7 @@ import networkx as nx
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
 from models.impulse import ImpulseSolver
+from models.impulse_mujoco import ImpulseSolverMujoco
 
 class ChainPendulumWithContact(RigidBody):
     dt = 0.01
@@ -24,6 +25,7 @@ class ChainPendulumWithContact(RigidBody):
         cors=[1.0, 1.0, 1.0, 1.0], 
         bdry_lin_coef=[[1, 0, 1], [-1, 0, 1]],
         is_homo=True,
+        is_mujoco_like=False,
         dtype=torch.float64
     ):
         assert n_o == len(ms) == len(ls) == len(radii)
@@ -47,22 +49,39 @@ class ChainPendulumWithContact(RigidBody):
         self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
         self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
         self.is_homo = is_homo
+        self.is_mujoco_like = is_mujoco_like
 
-        self.impulse_solver = ImpulseSolver(
-            dt = self.dt,
-            n_o = self.n_o,
-            n_p = self.n_p,
-            d = self.d,
-            ls = self.ls,
-            bdry_lin_coef = self.bdry_lin_coef,
-            check_collision = self.check_collision,
-            cld_2did_to_1did = self.cld_2did_to_1did,
-            DPhi = self.DPhi
-        )        
+        if not is_mujoco_like:
+            self.impulse_solver = ImpulseSolver(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = self.ls,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi
+            )     
+        else:
+            self.impulse_solver = ImpulseSolverMujoco(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = self.ls,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi
+            )    
 
 
     def __str__(self):
-        return f"{self.__class__.__name__}{self.kwargs_file_name}"
+        if self.is_mujoco_like:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}_mujoco"
+        else:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, x):
         M = self.M.to(dtype=x.dtype)

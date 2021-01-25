@@ -47,13 +47,17 @@ class Model(pl.LightningModule):
         super().__init__()
         hparams = Namespace(**hparams) if type(hparams) is dict else hparams
         vars(hparams).update(**kwargs)
+        if not hasattr(hparams, "is_mujoco_like"):
+            hparams.is_mujoco_like = False
 
         if hparams.body_kwargs_file == "":
             body = str_to_class(hparams.body_class)()
         else:
             with open(os.path.join(THIS_DIR, "examples", hparams.body_kwargs_file+".json"), "r") as file:
                 body_kwargs = json.load(file)
-            body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, **body_kwargs)
+            body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, 
+                                                    is_mujoco_like=hparams.is_mujoco_like, 
+                                                    **body_kwargs)
             vars(hparams).update(**body_kwargs)
         vars(hparams).update(
             dt=body.dt, 
@@ -238,6 +242,7 @@ class Model(pl.LightningModule):
         parser.add_argument("--n-train", type=int, default=800, help="number of train trajectories")
         parser.add_argument("--n-val", type=int, default=100, help="number of validation trajectories")
         parser.add_argument("--n-test", type=int, default=100, help="number of test trajectories")
+        parser.add_argument("--is-mujoco-like", action="store_true", default=False)
         # optimizer
         parser.add_argument("--chunk-len", type=int, default=5)
         parser.add_argument("--batch-size", type=int, default=200)
@@ -267,8 +272,9 @@ if __name__ == "__main__":
     hparams = parser.parse_args()
     model = Model(hparams)
 
+    is_mujoco = "_mujoco" if hparams.is_mujoco_like else ""
     savedir = os.path.join(".", "logs", 
-                          hparams.body_kwargs_file + f"_{hparams.network_class}" + f"_N{hparams.n_train}")
+                          hparams.body_kwargs_file + is_mujoco + f"_{hparams.network_class}" + f"_N{hparams.n_train}")
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=savedir, name='')
 
     checkpoint = ModelCheckpoint(monitor="train/loss",

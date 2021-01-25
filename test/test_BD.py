@@ -15,7 +15,7 @@ from trainer import Model
 seed_everything(0)
 
 import matplotlib.pyplot as plt
-# plt.switch_backend("TkAgg")
+plt.switch_backend("TkAgg")
 
 def test_BD2_0():
     body_kwargs_file = "BD2_homo_cor1_mu0.5_g0"
@@ -40,7 +40,7 @@ def test_BD1_0():
     body_kwargs_file = "BD1_homo_cor0_mu0.5"
     with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
         body_kwargs = json.load(file)
-    body = BouncingDisks(body_kwargs_file, **body_kwargs)
+    body = BouncingDisks(body_kwargs_file, is_mujoco_like=True, **body_kwargs)
     dataset = RigidBodyDataset(
         mode = "test",
         n_traj = 10,
@@ -94,4 +94,4 @@ def test_BD5_1():
     assert 1
 
 if __name__ == "__main__":
-    test_BD5_1()
+    test_BD1_0()

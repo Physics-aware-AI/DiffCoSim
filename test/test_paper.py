@@ -20,7 +20,7 @@ from trainer import Model
 seed_everything(0)
 
 import matplotlib.pyplot as plt
-plt.switch_backend("TkAgg")
+# plt.switch_backend("TkAgg")
 
 def utils(model, name, n_p_1=0, test_batch_size=2, test_batch_idx=0):
     print(torch.exp(model.model.m_params[f"{n_p_1}"]))
@@ -34,7 +34,7 @@ def utils(model, name, n_p_1=0, test_batch_size=2, test_batch_idx=0):
     pred_zts_true_energy = log["pred_zts_true_energy"].numpy()
     plt.plot(true_zts_true_energy[test_batch_idx])
     plt.plot(pred_zts_true_energy[test_batch_idx])
-    plt.show()
+    plt.show(block=False)
 
     ani = model.body.animate(log["true_zts"], test_batch_idx)
     ani.save(os.path.join(THIS_DIR, f'{name}_true_zts.gif'))
@@ -131,8 +131,8 @@ def test_paper_7():
         PARENT_DIR,
         "logs",
         "RC_default_CLNNwC_N800",
-        "version_0",
-        "epoch=903.ckpt"
+        "version_1", # 0
+        "epoch=127.ckpt" # 903
     ) 
     model = Model.load_from_checkpoint(checkpoint_path)
     utils(model, n_p_1=0, name="test_paper_7")
@@ -150,5 +150,29 @@ def test_paper_8():
     utils(model, n_p_1=0, name="test_paper_8")
     assert 1
 
+def test_paper_9():
+    checkpoint_path = os.path.join(
+        PARENT_DIR,
+        "logs",
+        "Gyro_homo_cor1_mu0_mujoco_CLNNwC_N800",
+        "version_0",
+        "epoch=856.ckpt"
+    ) 
+    model = Model.load_from_checkpoint(checkpoint_path)
+    utils(model, n_p_1=3, name="test_paper_9")
+    assert 1
+
+def test_paper_10():
+    checkpoint_path = os.path.join(
+        PARENT_DIR,
+        "logs",
+        "Gyro_homo_cor0.8_mu0.1_mujoco_CLNNwC_N800",
+        "version_0",
+        "epoch=894.ckpt"
+    ) 
+    model = Model.load_from_checkpoint(checkpoint_path)
+    utils(model, n_p_1=3, name="test_paper_10")
+    assert 1
+
 if __name__ == "__main__":
-    test_paper_8()
+    test_paper_10()
