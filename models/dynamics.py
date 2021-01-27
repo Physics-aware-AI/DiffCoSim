@@ -34,11 +34,10 @@ class HamiltonianDynamics(nn.Module):
 
 
 class ConstrainedHamiltonianDynamics(nn.Module):
-    def __init__(self, H, DPhi, cld_checker):
+    def __init__(self, H, DPhi):
         super().__init__()
         self.H = H
         self.DPhi = DPhi
-        self.cld_checker = cld_checker
 
     def forward(self, t, z):
         assert (t.ndim == 0) and (z.ndim == 2)

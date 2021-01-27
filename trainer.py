@@ -28,6 +28,7 @@ from systems.elastic_rope import ElasticRope
 from systems.gyroscope_with_wall import GyroscopeWithWall
 # from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
+from models.hamiltonian import CHNNwC
 # from find_bad_grad import BadGradFinder
 
 seed_everything(0)
@@ -257,7 +258,7 @@ class Model(pl.LightningModule):
         parser.add_argument("--num-layers", type=int, default=3, help="number of hidden layers")
         parser.add_argument("--network-class", type=str, help="dynamical model",
                             choices=[
-                                "CLNNwC"
+                                "CLNNwC", "CHNNwC"
                             ], default="CLNNwC")
         parser.add_argument("--tol", type=float, default=1e-7)
         parser.add_argument("--solver", type=str, default="rk4")

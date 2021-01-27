@@ -4,15 +4,23 @@ from models.dynamics import ConstrainedHamiltonianDynamics, HamiltonianDynamics
 from utils import Linear, mlp, Reshape, CosSin
 from systems.rigid_body import EuclideanT, GeneralizedT, rigid_DPhi
 from torchdiffeq import odeint
+import torch.nn.functional as F
 
-class CHNN(nn.Module):
-    def __init__(self, body_graph, dof_ndim, num_layers, hidden_size, dtype, **kwargs):
+class CHNNwC(nn.Module):
+    def __init__(self, body_graph, impulse_solver, n_c, d, 
+        is_homo=False,
+        hidden_size: int = 256, 
+        num_layers: int = 3, 
+        device: torch.device = torch.device('cpu'),
+        dtype: torch.dtype = torch.float32, 
+        **kwargs
+    ):
         super().__init__()
         self.body_graph = body_graph
-        self.nfe = 0
         self.n = len(self.body_graph.nodes)
-        self.d = dof_ndim
-        self.q_ndim = self.n * self.d
+        self.d, self.n_c = d, n_c
+        self.dtype = dtype
+        self.nfe = 0
         self.dynamics = ConstrainedHamiltonianDynamics(self.hamiltonian, self.DPhi)
         sizes = [self.n * self.d] + num_layers * [hidden_size] + [1]
         self.V_net = nn.Sequential(
@@ -23,8 +31,34 @@ class CHNN(nn.Module):
             {str(d): nn.Parameter(0.1 * torch.randn(len(ids)//(d+1), d+1, dtype=dtype)) # N, d+1
                 for d, ids in body_graph.d2ids.items()}
         )
+        assert len(self.m_params) == 1 # limited support for now
+        self.n_p = int(list(self.m_params.keys())[0]) + 1
+        self.n_o = self.n // self.n_p
+        if is_homo:
+            self.mu_params = nn.Parameter(torch.rand(1, dtype=dtype))
+            self.cor_params = nn.Parameter(torch.randn(1, dtype=dtype))
+        else:
+            self.mu_params = nn.Parameter(torch.rand(n_c, dtype=dtype))
+            self.cor_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
+        self.is_homo = is_homo
 
-    def Minv(self, p):
+        self.impulse_solver = impulse_solver
+
+    @property
+    def Minv(self):
+        n = self.n
+        # d == n_p-1
+        d = int(list(self.m_params.keys())[0])
+        inv_moments = torch.exp(-self.m_params[str(d)]) # n_o, n_p
+        inv_masses = inv_moments[:, :1] # n_o, 1
+        if d == 0:
+            return torch.diag_embed(inv_masses[:, 0])
+        blocks = torch.diag_embed(torch.cat([0*inv_masses, inv_moments[:, 1:]], dim=-1)) # n_o, n_p, n_p
+        blocks = blocks + torch.ones_like(blocks)
+        blocks = blocks * inv_masses.unsqueeze(-1)
+        return torch.block_diag(*blocks) # (n, n)
+
+    def Minv_op(self, p):
         assert len(self.m_params) == 1 # limited support for now
         *dims, n, a = p.shape
         d = int(list(self.m_params.keys())[0])
@@ -39,7 +73,7 @@ class CHNN(nn.Module):
         inv_intertia_p = padded_intertias_inv.unsqueeze(-1) * p_reshaped # (N, d+1, 1) * (..., N, d+1, a) = (..., N, d+1, a)
         return (inv_mass_p + inv_intertia_p).reshape(*p.shape)
 
-    def M(self, v):
+    def M_op(self, v):
         assert len(self.m_params) == 1 # limited support for now
         *dims, n, a = v.shape
         d = int(list(self.m_params.keys())[0])
@@ -63,11 +97,11 @@ class CHNN(nn.Module):
     def DPhi(self, z):
         bs = z.shape[0]
         r, p = z.reshape(bs, 2, self.n, self.d).unbind(dim=1)
-        r_dot = self.Minv(p)
+        r_dot = self.Minv_op(p)
         DPhi = rigid_DPhi(self.body_graph, r, r_dot)
         # convert d/dr_dot to d/dp
         # DPhi[:, 1] = self.Minv(DPhi[:, 1].reshape(bs, self.n, -1)).reshape(DPhi[:,1].shape)
-        DPhi = torch.stack([DPhi[:, 0], self.Minv(DPhi[:, 1].reshape(bs, self.n, -1)).reshape(DPhi[:,1].shape)], dim=1)
+        DPhi = torch.stack([DPhi[:, 0], self.Minv_op(DPhi[:, 1].reshape(bs, self.n, -1)).reshape(DPhi[:,1].shape)], dim=1)
         return DPhi.reshape(bs, 2*self.n*self.d, -1)
 
     def hamiltonian(self, t, z):
@@ -75,7 +109,7 @@ class CHNN(nn.Module):
         bs, D = z.shape
         r = z[:, : D//2].reshape(bs, self.n, -1)
         p = z[:, D//2 :].reshape(bs, self.n, -1)
-        T = EuclideanT(p, self.Minv)
+        T = EuclideanT(p, self.Minv_op)
         V = self.potential(r)
         return T + V
 
@@ -94,18 +128,43 @@ class CHNN(nn.Module):
         assert (z0.ndim == 4) and (ts.ndim == 1)
         assert z0.shape[-1] == self.d
         assert z0.shape[-2] == self.n
+        if self.is_homo:
+            mus = F.relu(self.mu_params * torch.ones(self.n_c).type_as(self.mu_params))
+            cors = F.hardsigmoid(self.cor_params* torch.ones(self.n_c).type_as(self.cor_params))
+        else:
+            mus = F.relu(self.mu_params)
+            cors = F.hardsigmoid(self.cor_params)
+
         bs = z0.shape[0]
         r0, r_dot0 = z0.chunk(2, dim=1)
-        p0 = self.M(r_dot0)
+        p0 = self.M_op(r_dot0)
 
         rp0 = torch.cat([r0, p0], dim=1).reshape(bs, -1) # assume C-style stride
-        rpT = odeint(self, rp0, ts, rtol=tol, method=method)
-        rpT = rpT.permute(1,0,2) # bs, T, 2*n*d
-        rpT = rpT.reshape(bs, len(ts), 2, self.n, self.d)
-        rT, pT = rpT.chunk(2, dim=2)
-        r_dotT = self.Minv(pT)
-        r_r_dotT = torch.cat([rT, r_dotT], dim=2)
-        return r_r_dotT
+        rpt = rp0
+        # rpT = torch.zeros([bs, len(ts), rpt.shape[1]]).type_as(rpt)
+        # rpT[:, 0] = rpt
+        rvT = torch.zeros([bs, len(ts), 2, self.n, self.d]).type_as(z0)
+        rvT[:, 0] = z0
+        for i in range(len(ts)-1):
+            # rpt: (bs, -1)
+            rpt_n = odeint(self, rpt, ts[i:i+2], rtol=tol, method=method)[1]
+            rt_n, pt_n = rpt_n.reshape(bs, 2, self.n, self.d).chunk(2, dim=1)
+            # rvt_n : (bs, 2, n, d)
+            rvt_n = torch.stack([rt_n, self.Minv_op(pt_n)], dim=1)
+            rvt_n, _ = self.impulse_solver.add_impulse(rvt_n, mus, cors, self.Minv)
+            rvt_n = rvt_n.reshape(bs, 2, self.n, self.d)
+            rpt_n = torch.stack([rvt_n[:, 0], self.M_op(rvt_n[:, 1])], dim=1).reshape(bs, -1)
+            rpt = rpt_n
+            # rpT[:, i+1] = rpt
+            rvT[:, i+1] = rvt_n
+        # rpT = odeint(self, rp0, ts, rtol=tol, method=method)
+        # rpT = rpT.permute(1,0,2) # bs, T, 2*n*d
+        # rpT = rpT.reshape(bs, len(ts), 2, self.n, self.d)
+        # rT, pT = rpT.chunk(2, dim=2)
+        # r_dotT = self.Minv_op(pT)
+        # r_r_dotT = torch.cat([rT, r_dotT], dim=2)
+        # return r_r_dotT
+        return rvT
 
 
 class HNN_Struct(nn.Module):
