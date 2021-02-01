@@ -15,7 +15,7 @@ from trainer import Model
 seed_everything(0)
 
 import matplotlib.pyplot as plt
-plt.switch_backend("TkAgg")
+# plt.switch_backend("TkAgg")
 
 def test_BM5_0():
     body_kwargs_file = "BM5_homo_cor1_mu0_g0"
@@ -28,7 +28,7 @@ def test_BM5_0():
         body = body,
         dtype = torch.float32,
         chunk_len = 100,
-        regen=True
+        regen=False
     )
 
     ani = body.animate(dataset.zs, 1)
@@ -56,4 +56,4 @@ def test_BM5_1():
     assert 1
 
 if __name__ == "__main__":
-    test_BM5_1()
+    test_BM5_0()

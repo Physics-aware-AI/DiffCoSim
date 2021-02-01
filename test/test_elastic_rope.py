@@ -15,7 +15,7 @@ from trainer import Model
 seed_everything(0)
 
 import matplotlib.pyplot as plt
-plt.switch_backend("TkAgg")
+# plt.switch_backend("TkAgg")
 
 def test_elastic_rope_0():
     body = ElasticRope()
@@ -24,8 +24,8 @@ def test_elastic_rope_0():
         n_traj = 10,
         body = body,
         dtype = torch.float32,
-        chunk_len = 100,
-        regen=True
+        chunk_len = 20,
+        regen=False
     )
 
     ani = body.animate(dataset.zs, 3)

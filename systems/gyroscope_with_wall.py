@@ -192,7 +192,7 @@ class GyroscopeAnimation(Animation):
         self.n_p = body.n_p
 
         # plot the wall
-        corner = 1.0
+        corner = 0.6
         xx = np.array([[-corner, corner],
                         [-corner, corner]])
         y_coor = body.bdry_lin_coef[0, 3].numpy()
@@ -200,9 +200,9 @@ class GyroscopeAnimation(Animation):
                         [-y_coor, -y_coor]])
         zz = np.array([[-corner, -corner],
                         [corner, corner]])
-        self.ax.plot_surface(xx, yy, zz, color="tab:gray", zorder=1)
+        self.ax.plot_surface(xx, yy, zz, color="lightgray", zorder=-1)
         # plot the cone
-        self.cone = [self.ax.plot_surface(xx, yy, zz, zorder=0)]
+        self.cone = [self.ax.plot_surface(xx, yy, zz, zorder=1)]
 
 
         # plot the lines
@@ -210,7 +210,10 @@ class GyroscopeAnimation(Animation):
         self.objects["lines"] = sum([self.ax.plot([], [], [], "-", c="k", zorder=5) for _ in range(2)], [])
         self.objects['trails'] = sum([self.ax.plot([], [], [], "-", color="teal", zorder=10) for i in range(1)], [])
 
-        self.ax.view_init(elev=10., azim=0)
+        self.ax.view_init(elev=20., azim=60)
+        self.ax.dist = 2.5
+        self.ax.axis("off"),
+        self.fig.set_size_inches(10.5, 10.5)
 
     def update(self, i=0):
         e = self.body.delta.numpy() @ self.qt[i] # (3, 3)
@@ -240,7 +243,7 @@ class GyroscopeAnimation(Animation):
         t, theta = np.meshgrid(t, theta)
         R = np.linspace(0.0001, self.body.radius, step)
         xx, yy, zz = [e[0,j]*R*np.cos(theta) + e[1,j]*R*np.sin(theta) + e[2,j]*t for j in [0, 1, 2]]
-        self.cone[0] = self.ax.plot_surface(xx, yy, zz, color="lightsalmon", zorder=2)
+        self.cone[0] = self.ax.plot_surface(xx, yy, zz, color="orangered", zorder=4)
         # plot trails
         trail_len = 150
         T, n, d = self.qt.shape

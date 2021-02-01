@@ -15,7 +15,7 @@ from trainer import Model
 seed_everything(0)
 
 import matplotlib.pyplot as plt
-plt.switch_backend("TkAgg")
+# plt.switch_backend("TkAgg")
 
 def test_gyro_0():
     body_kwargs_file = "Gyro_homo_cor1_mu0"
@@ -31,15 +31,15 @@ def test_gyro_0():
         regen=False
     )
 
-    N, T = dataset.zs.shape[:2]
-    x, v = dataset.zs.chunk(2, dim=2)
-    p_x = body.M.type_as(v) @ v
-    zts = torch.cat([x, p_x], dim=2)
-    energy = body.hamiltonian(None, zts.reshape(N*T, -1)).reshape(N, T)
-    plt.plot(energy[3])
-    plt.show()
+    # N, T = dataset.zs.shape[:2]
+    # x, v = dataset.zs.chunk(2, dim=2)
+    # p_x = body.M.type_as(v) @ v
+    # zts = torch.cat([x, p_x], dim=2)
+    # energy = body.hamiltonian(None, zts.reshape(N*T, -1)).reshape(N, T)
+    # plt.plot(energy[3])
+    # plt.show()
 
-    ani = body.animate(dataset.zs, 0)
+    ani = body.animate(dataset.zs[:, 0:2], 0)
     ani.save(os.path.join(THIS_DIR, 'test_gyro_0.gif'))
 
     assert 1

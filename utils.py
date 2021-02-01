@@ -23,7 +23,8 @@ class Animation():
         if d!=3: self.ax.set_aspect("equal")
 
         empty = d * [[]]
-        self.colors = np.random.choice([f"C{i}" for i in range(15)], size=n, replace=False)
+        # self.colors = np.random.choice([f"C{i}" for i in range(15)], size=n, replace=False)
+        self.colors = [f"C{i}" for i in range(15)]
         self.objects = {
             'pts': sum([self.ax.plot(*empty, ms=6, color=self.colors[i]) for i in range(n)], []),
             'trails': sum([self.ax.plot(*empty, "-", color=self.colors[i]) for i in range(n)], [])

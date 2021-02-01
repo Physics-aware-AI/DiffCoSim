@@ -23,7 +23,7 @@ class ChainPendulumWithContact(RigidBody):
         radii=[0.1, 0.1], 
         mus=[0.0, 0.0, 0.0, 0.0], 
         cors=[1.0, 1.0, 1.0, 1.0], 
-        bdry_lin_coef=[[1, 0, 1], [-1, 0, 1]],
+        bdry_lin_coef=[[0, 1, 1]],
         is_homo=True,
         is_mujoco_like=False,
         dtype=torch.float64
@@ -203,16 +203,18 @@ class Pendulum_w_Wall_Animation(Animation):
         x_min, y_min, x_max, y_max = -1.1, -1.1, 1.1, 1.1
         self.ax.set_xlim(x_min, x_max)
         self.ax.set_ylim(y_min, y_max)
+        self.ax.axis("off"),
+        self.fig.set_size_inches(10.5, 10.5)
 
         # self.body = body
         self.G = body.body_graph
         empty = self.qt.shape[-1] * [[]]
         n_o = len(nx.get_node_attributes(self.G, "tether")) + len(self.G.edges)
-        self.objects["links"] = sum([self.ax.plot(*empty, "-", color='k') for _ in range(n_o)], [])
+        self.objects["links"] = sum([self.ax.plot(*empty, "-", color='k', linewidth=4) for _ in range(n_o)], [])
         self.objects["pts"] = sum(
             [self.ax.plot(*empty, "o", ms=10*body.ms[i], c=self.colors[i]) for i in range(qt.shape[1])], []
         )
-        self.circles = [Circle(empty, body.radii[i], color=self.colors[i]) for i in range(qt.shape[1])] + []
+        self.circles = [Circle([[0], [0]], body.radii[i], color=self.colors[i]) for i in range(qt.shape[1])] + []
 
         [self.ax.add_artist(circle) for circle in self.circles]
 
@@ -221,7 +223,7 @@ class Pendulum_w_Wall_Animation(Animation):
         else:
             lines = [[(-1, y_min), (-1, y_max)], [(1, y_min), (1, y_max)]]
         # lines = [[(-body.lb, y_min), (-body.lb, y_max)], [(body.rb, y_min), (body.rb, y_max)]]
-        lc = mc.LineCollection(lines, linewidths=2)
+        lc = mc.LineCollection(lines, linewidths=4, color="k")
         self.ax.add_collection(lc)
 
     def update(self, i=0):

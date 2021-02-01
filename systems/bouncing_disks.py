@@ -197,13 +197,15 @@ class BouncingDisksAnimation(Animation):
 
         self.ax.set_xlim(-0.1, 1.1)
         self.ax.set_ylim(-0.1, 1.1)
+        self.ax.axis("off"),
+        self.fig.set_size_inches(10.5, 10.5)
 
         empty = self.qt.shape[-1] * [[]]
         self.objects["links"] = []
         self.objects["pts"] = sum(
             [self.ax.plot(*empty, "o", ms=body.ls[i], c=self.colors[i]) for i in range(self.n_o)], []
         )
-        self.circles = [Circle(empty, body.ls[i], color=self.colors[i]) for i in range(self.n_o)] + []
+        self.circles = [Circle([[0], [0]], body.ls[i], color=self.colors[i]) for i in range(self.n_o)] + []
 
         [self.ax.add_artist(circle) for circle in self.circles]
 
@@ -211,10 +213,10 @@ class BouncingDisksAnimation(Animation):
         lines = [[(0,0),(0,1)], [(0,1),(1,1)], [(1,1),(1,0)], [(1,0),(0,0)]]
         # c = np.array([(1,2,)])
 
-        lc = mc.LineCollection(lines, linewidths=2)
+        lc = mc.LineCollection(lines, linewidths=4, color="k")
         self.ax.add_collection(lc)
         segments = [np.zeros([2, 2]) for i in range(self.n_o)]
-        self.disk_orientation = mc.LineCollection(segments=segments, linewidths=2)
+        self.disk_orientation = mc.LineCollection(segments=segments, linewidths=4, color='k')
         self.ax.add_collection(self.disk_orientation)
 
     def update(self, i=0):

@@ -29,6 +29,10 @@ from systems.gyroscope_with_wall import GyroscopeWithWall
 # from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
 from models.hamiltonian import CHNNwC
+from baselines.CLNN_MLP import CLNN_MLP
+from baselines.CLNN_CD_MLP import CLNN_CD_MLP
+from baselines.CLNN_IN import CLNN_IN
+from baselines.IN import IN
 # from find_bad_grad import BadGradFinder
 
 seed_everything(0)
@@ -63,7 +67,8 @@ class Model(pl.LightningModule):
         vars(hparams).update(
             dt=body.dt, 
             integration_time=body.integration_time,
-            is_homo=body.is_homo
+            is_homo=body.is_homo,
+            body=body
         )
 
         # load/generate data
@@ -133,7 +138,17 @@ class Model(pl.LightningModule):
         return (pred_zts - true_zts).abs().mean()
 
     def training_step(self, batch, batch_idx):
+        # z0: (bs, 2, n, d), zts: (bs, T, 2, n, d), ts: (bs, T)
         (z0, ts), zts, is_clds = batch
+
+        if self.hparams.network_class != "CLNNwC" and self.hparams.network_class != "CHNNwC":
+            # reshape data to predict only one step forward for ablation study
+            bs, T, _, n, d = zts.shape
+            z0 = zts[:, :-1].reshape(bs*(T-1), 2, n, d)
+            zts = torch.stack([z0, zts[:, 1:].reshape(bs*(T-1), 2, n, d)], dim=1)
+            ts = ts[:, 0:2]
+            assert zts.shape == (bs*(T-1), 2, 2, n, d) and ts.shape == (bs, 2)
+
         ts = ts[0] - ts[0,0]
         if not self.hparams.train_separate:
             pred_zts = self.model.integrate(z0, ts, tol=self.hparams.tol, method=self.hparams.solver)
@@ -164,9 +179,10 @@ class Model(pl.LightningModule):
         for param in self.model.m_params.parameters():
             param.requires_grad = train_m_V
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch, batch_idx, integration_time=None):
         (z0, _), _, _ = batch
-        integration_time = max(self.body.integration_time, self.body.dt*100)
+        if integration_time is None:
+            integration_time = max(self.body.integration_time, self.body.dt*100)
         ts = torch.arange(0.0, integration_time, self.body.dt).type_as(z0)
         pred_zts = self.model.integrate(z0, ts, method='rk4')
         true_zts, _ = self.body.integrate(z0, ts, method='rk4') # (bs, T, 2, n, d)
@@ -258,7 +274,7 @@ class Model(pl.LightningModule):
         parser.add_argument("--num-layers", type=int, default=3, help="number of hidden layers")
         parser.add_argument("--network-class", type=str, help="dynamical model",
                             choices=[
-                                "CLNNwC", "CHNNwC"
+                                "CLNNwC", "CHNNwC", "CLNN_MLP", "CLNN_CD_MLP", "CLNN_IN", "IN"
                             ], default="CLNNwC")
         parser.add_argument("--tol", type=float, default=1e-7)
         parser.add_argument("--solver", type=str, default="rk4")

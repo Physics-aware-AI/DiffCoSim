@@ -256,10 +256,16 @@ class ElasticRopeAnimation(Animation):
         self.body = body
         self.n_o = body.n_o
         self.n_p = body.n_p
+
+        self.ax.set_xlim(-0.49, 0.49)
+        self.ax.set_ylim(-0.49, 0.49)
+        self.ax.axis("off"),
+        self.fig.set_size_inches(10.5, 10.5)
+
         self.G = body.body_graph
-        self.objects["links"] = sum([self.ax.plot([], [], "-", color='k') for _ in range(self.n_o)], [])
+        self.objects["links"] = sum([self.ax.plot([], [], "-", color='k', linewidth=4) for _ in range(self.n_o)], [])
         self.objects["pts"] = sum(
-            [self.ax.plot([], [], "o", ms=10*body.ms[i], c=self.colors[i]) for i in range(qt.shape[1])], []
+            [self.ax.plot([], [], "o", ms=10*body.ms[i], c="tab:blue") for i in range(qt.shape[1])], []
         )
 
     def update(self, i=0):
