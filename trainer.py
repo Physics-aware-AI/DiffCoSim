@@ -54,6 +54,10 @@ class Model(pl.LightningModule):
         vars(hparams).update(**kwargs)
         if not hasattr(hparams, "is_mujoco_like"):
             hparams.is_mujoco_like = False
+        if not hasattr(hparams, "is_base_full"):
+            hparams.is_base_full = False
+        if not hasattr(hparams, "noise_std"):
+            hparams.noise_std = 0.0
 
         if hparams.body_kwargs_file == "":
             body = str_to_class(hparams.body_class)()
@@ -78,6 +82,7 @@ class Model(pl.LightningModule):
             body = body,
             dtype = self.dtype,
             chunk_len = hparams.chunk_len,
+            noise_std = hparams.noise_std,
         )
 
         val_dataset = str_to_class(hparams.dataset_class)(
@@ -86,6 +91,7 @@ class Model(pl.LightningModule):
             body = body,
             dtype = self.dtype,
             chunk_len = hparams.chunk_len,
+            noise_std = hparams.noise_std,
         )
 
         test_dataset = str_to_class(hparams.dataset_class)(
@@ -94,6 +100,7 @@ class Model(pl.LightningModule):
             body = body,
             dtype = self.dtype,
             chunk_len = hparams.chunk_len,
+            noise_std = hparams.noise_std,
         )
 
         datasets = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
@@ -141,7 +148,7 @@ class Model(pl.LightningModule):
         # z0: (bs, 2, n, d), zts: (bs, T, 2, n, d), ts: (bs, T)
         (z0, ts), zts, is_clds = batch
 
-        if self.hparams.network_class != "CLNNwC" and self.hparams.network_class != "CHNNwC":
+        if self.hparams.network_class != "CLNNwC" and self.hparams.network_class != "CHNNwC" and not self.hparams.is_base_full:
             # reshape data to predict only one step forward for ablation study
             bs, T, _, n, d = zts.shape
             z0 = zts[:, :-1].reshape(bs*(T-1), 2, n, d)
@@ -260,6 +267,7 @@ class Model(pl.LightningModule):
         parser.add_argument("--n-val", type=int, default=100, help="number of validation trajectories")
         parser.add_argument("--n-test", type=int, default=100, help="number of test trajectories")
         parser.add_argument("--is-mujoco-like", action="store_true", default=False)
+        parser.add_argument("--noise-std", type=float, default=0.0)
         # optimizer
         parser.add_argument("--chunk-len", type=int, default=5)
         parser.add_argument("--batch-size", type=int, default=200)
@@ -276,6 +284,7 @@ class Model(pl.LightningModule):
                             choices=[
                                 "CLNNwC", "CHNNwC", "CLNN_MLP", "CLNN_CD_MLP", "CLNN_IN", "IN"
                             ], default="CLNNwC")
+        parser.add_argument("--is-base-full", action="store_true", default=False)
         parser.add_argument("--tol", type=float, default=1e-7)
         parser.add_argument("--solver", type=str, default="rk4")
     
@@ -290,8 +299,10 @@ if __name__ == "__main__":
     model = Model(hparams)
 
     is_mujoco = "_mujoco" if hparams.is_mujoco_like else ""
+    is_base_full = "_base_full" if hparams.is_base_full else ""
+    noise_std_str = "" if hparams.noise_std_str < 0.0000001 else f"_{hparams.noise_std_str}"
     savedir = os.path.join(".", "logs", 
-                          hparams.body_kwargs_file + is_mujoco + f"_{hparams.network_class}" + f"_N{hparams.n_train}")
+                          hparams.body_kwargs_file + is_mujoco + f"_{hparams.network_class}" + is_base_full + f"_N{hparams.n_train}" + noise_std_str)
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=savedir, name='')
 
     checkpoint = ModelCheckpoint(monitor="train/loss",

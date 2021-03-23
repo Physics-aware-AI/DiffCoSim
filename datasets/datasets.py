@@ -17,10 +17,12 @@ class RigidBodyDataset(Dataset):
         dtype=torch.float32,
         chunk_len=5,
         regen=False,
+        noise_std=0.0,
     ):
         super().__init__()
         self.mode = mode
         self.body = body
+        self.noise_std = noise_std
         filename = os.path.join(
             root_dir, f"traj_{body}_N{n_traj}_{mode}.pt"
         )
@@ -105,4 +107,10 @@ class RigidBodyDataset(Dataset):
             chosen_ts[i, :] = chunked_ts[chunk_idx, i]
             chosen_zs[i, :] = chunked_zs[chunk_idx, i]
             is_cld_in_chosen[i] = chunked_is_clds[chunk_idx, i].sum() > 0
-        return chosen_ts, chosen_zs, is_cld_in_chosen
+        if self.body.__class__.__name__ == "ChainPendulumWithContact":
+            chosen_q_qdot = self.body.global_cartesian_to_angle(chosen_zs)
+            chosen_q_qdot = chosen_q_qdot + torch.randn(*chosen_q_qdot.shape) * self.noise_std
+            noisy_zs = self.body.angle_to_global_cartesian(chosen_q_qdot)
+        else:
+            noisy_zs = chosen_zs + torch.randn(*chosen_zs.shape) * self.noise_std
+        return chosen_ts, noisy_zs, is_cld_in_chosen

@@ -13,13 +13,13 @@ class Animation():
         self.fig = plt.figure()
         self.ax = self.fig.add_axes([0, 0, 1, 1], projection='3d') if d==3 else self.fig.add_axes([0,0,1,1])
 
-        xyzmin = self.qt.min(0).min(0)
-        xyzmax = self.qt.max(0).max(0)
-        delta = xyzmax - xyzmin
-        lower = xyzmin - 0.1 * delta; upper = xyzmax + 0.1 * delta
-        self.ax.set_xlim((min(lower), max(upper)))
-        self.ax.set_ylim((min(lower), max(upper)))
-        if d==3: self.ax.set_zlim((min(lower), max(upper)))
+        # xyzmin = self.qt.min(0).min(0)
+        # xyzmax = self.qt.max(0).max(0)
+        # delta = xyzmax - xyzmin
+        # lower = xyzmin - 0.1 * delta; upper = xyzmax + 0.1 * delta
+        # self.ax.set_xlim((min(lower), max(upper)))
+        # self.ax.set_ylim((min(lower), max(upper)))
+        # if d==3: self.ax.set_zlim((min(lower), max(upper)))
         if d!=3: self.ax.set_aspect("equal")
 
         empty = d * [[]]

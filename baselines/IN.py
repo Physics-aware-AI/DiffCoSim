@@ -95,14 +95,19 @@ class IN(CLNNwC):
         """
         assert (z0.ndim == 4) and (ts.ndim == 1)
         assert (z0.shape[-1] == self.d) and z0.shape[-2] == self.n
-        assert len(ts) == 2
+        # assert len(ts) == 2
 
         bs, _, n, d = z0.shape
         # true Minv
         f_external = self.get_f_external(bs, n, d)
-
-        v1 = self.velocity_impulse(z0, self.inv_moments.type_as(z0), f_external) # bs, n, d
-        x0 = z0[:, 0] ; v0 = z0[:, 1]
-        x1 = x0 + v0 * (ts[1] - ts[0])
-        z1 = torch.stack([x1, v1], dim=1)
-        return torch.stack([z0, z1], dim=1)
+        zt = z0
+        zT = torch.zeros(bs, len(ts), 2, n, d).type_as(z0)
+        zT[:, 0] = zt
+        for i in range(len(ts)-1):
+            vt_n = self.velocity_impulse(zt, self.inv_moments.type_as(z0), f_external) # bs, n, d
+            xt = zt[:, 0] ; vt = zt[:, 1]
+            xt_n = xt + vt * (ts[i+1] - ts[i])
+            zt_n = torch.stack([xt_n, vt_n], dim=1)
+            zt = zt_n
+            zT[:, i+1] = zt
+        return zT

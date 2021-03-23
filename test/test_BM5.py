@@ -28,7 +28,8 @@ def test_BM5_0():
         body = body,
         dtype = torch.float32,
         chunk_len = 100,
-        regen=False
+        regen=True,
+        noise_std=0.01
     )
 
     ani = body.animate(dataset.zs, 1)

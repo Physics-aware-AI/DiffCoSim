@@ -29,7 +29,8 @@ def test_CP3_0():
         body = body,
         dtype = torch.float32,
         chunk_len = 100,
-        regen=True
+        regen=True,
+        noise_std=0.05,
     )
 
     N, T = dataset.zs.shape[:2]
