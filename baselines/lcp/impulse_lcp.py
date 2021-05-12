@@ -4,20 +4,23 @@ import torch.nn as nn
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 from diffcp.cone_program import SolverError
-from symeig import symeig_proj, symeig1, symeig2
+# from symeig import symeig
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PARENT_PARENT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from .lcp import LCPFunction
+lcp_solver = LCPFunction.apply
 
-class ImpulseSolver(nn.Module):
+class ImpulseSolverLCP(nn.Module):
     def __init__(
         self, dt, n_o, n_p, d, 
         check_collision, cld_2did_to_1did, DPhi,  
         ls, bdry_lin_coef, delta=None, 
         get_limit_e_for_Jac=None,
         get_3d_contact_point_c_tilde=None,
-        save_dir=os.path.join(PARENT_DIR, "tensors")
+        save_dir=os.path.join(PARENT_PARENT_DIR, "tensors")
     ):
         super().__init__()
         assert delta is not None or n_p == 1
@@ -38,6 +41,7 @@ class ImpulseSolver(nn.Module):
         self.get_limit_e_for_Jac = get_limit_e_for_Jac
         self.get_3d_contact_point_c_tilde = get_3d_contact_point_c_tilde
         self.save_dir = save_dir
+        
 
     def add_impulse(self, xv, mus, cors, Minv):
         bs = xv.shape[0]
@@ -84,11 +88,63 @@ class ImpulseSolver(nn.Module):
 
             # get equality constraints
             DPhi = self.DPhi(x[bs_idx:bs_idx+1], v[bs_idx:bs_idx+1]) # 
-
             if DPhi.shape[-1] != 0: # exist equality constraints
-                dv = self.get_dv_w_J_e(bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
+                # dv = self.get_dv_w_J_e(bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
+                C = DPhi.shape[-1]
+                J_e_T = DPhi[:,0,:,:,0,:].reshape(n*d, C)
+                J_e = J_e_T.t().unsqueeze(0) # (1, C, n*d)
+                b = torch.zeros([1, C]).type_as(x)
             else:                   # no equality constraints
-                dv = self.get_dv_wo_J_e(bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+                # dv = self.get_dv_wo_J_e(bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+                J_e = torch.tensor([]).type_as(x)
+                b = torch.tensor([]).type_as(x)
+            # get contact jacobian (the normal component)
+            J_cn = Jac[:, 0].reshape(1, n_cld, n*d)
+            # the tangential jacobian takes both opposte directions into account
+            J_ct = torch.zeros([1, n_cld*(d-1)*2, n*d])
+            if d == 2:
+                J_ct[0, 0::2, :] = Jac[:, 1].reshape(n_cld, n*d)
+                J_ct[0, 1::2, :] = -Jac[:, 1].reshape(n_cld, n*d)
+            else:
+                J_ct[0, 0::4] = Jac[:, 1].reshape(n_cld, n*d)
+                J_ct[0, 1::4] = Jac[:, 2].reshape(n_cld, n*d)
+                J_ct[0, 2::4] = - Jac[:, 1].reshape(n_cld, n*d)
+                J_ct[0, 3::4] = - Jac[:, 2].reshape(n_cld, n*d)
+            # populate mass matrix to n*d, n*d
+            M = torch.inverse(Minv)
+            populated_M = torch.zeros([1, n*d, n*d]).type_as(x)
+            for i in range(d):
+                populated_M[0, i::d, i::d] = M
+            
+            mu_matrix = torch.diag(mu).unsqueeze(0) # (n_cld, n_cld)
+
+            E = torch.zeros((1, n_cld*(d-1)*2, n_cld)).type_as(x)
+            for i in range(n_cld):
+                E[0, i*2*(d-1):(i+1)*2*(d-1), i] = torch.ones(2*(d-1)).type_as(E)
+            
+            Mv_ = (populated_M @ v[bs_idx].reshape(n*d, 1)).squeeze(2) # (1, n*d)
+
+            J_cn_v_ = (J_cn @ v[bs_idx].reshape(n*d, 1)).squeeze(2) # (1, n_cld)
+
+            # prepare matrices for the LCP
+            h = torch.cat(
+                [torch.min(-v_star[:,0].unsqueeze(0), cor*J_cn_v_), torch.zeros((1, n_cld*(d-1)*2+n_cld)).type_as(x)],
+                dim=1
+            )#, the first entry must be a negative number, 
+
+            G = torch.cat(
+                [J_cn, J_ct, torch.zeros([1, n_cld, n*d])], dim=1
+            )
+
+            F = torch.zeros([1, G.size(1), G.size(1)]).type_as(x)
+            F[:, -mu.size(0):, :mu.size(0)] = mu_matrix
+            F[:, J_cn.size(1):-E.size(2), -E.size(2):] = E
+            F[:, -mu.size(0):, mu.size(0):mu.size(0) + E.size(1)] = - E.transpose(1, 2)
+
+            v_plus = -lcp_solver(populated_M, Mv_, G, h, J_e, b, -F)
+            dv = torch.zeros_like(new_v)
+            dv[bs_idx] = - new_v[bs_idx] + v_plus.reshape(n, d)
+
             new_v = new_v + dv
 
         return torch.stack([x, new_v], dim=1).reshape(bs, -1), is_cld
@@ -177,28 +233,16 @@ class ImpulseSolver(nn.Module):
                         Jac[n_cld_ij+n_cld_bdry+cid, 1, i_limit_offset] = self.e_t_limit_for_Jac[bs_idx, n_o+i_limit_offset, None, :]
                     
             return Jac
-        # the gyroscope experiment
-        elif torch.allclose(self.bdry_lin_coef, torch.tensor([[0., 1., 0., 0.]]).type_as(self.bdry_lin_coef)): 
+        elif d == 3:
             e_n_bdry = torch.tensor([[0, -1, 0]]).type_as(x) # (3)
             e_t1_bdry = torch.tensor([[-1, 0, 0]]).type_as(x)
             e_t2_bdry = torch.tensor([[0, 0, -1]]).type_as(x)
-            c_til_bdry_1 = self.contact_c_tilde[bs_idx].type_as(x) # (1, 4)
+            c_til_bdry_1 = self.contact_c_tilde[bs_idx] # (1, 4)
             Jac = torch.zeros([n_cld, d, n_o, n_p, d], device=x.device, dtype=x.dtype)
             for cid, (i, _) in enumerate(cld_bdry_ids):
                 Jac[n_cld_ij+cid, 0, i, :] = - c_til_bdry_1[cid, :, None] * e_n_bdry[cid, None, :]
                 Jac[n_cld_ij+cid, 1, i, :] = - c_til_bdry_1[cid, :, None] * e_t1_bdry[cid, None, :]
                 Jac[n_cld_ij+cid, 2, i, :] = - c_til_bdry_1[cid, :, None] * e_t2_bdry[cid, None, :]
-            return Jac
-        # the cloth experiment
-        elif torch.allclose(self.bdry_lin_coef, torch.tensor([[0., 0., 1., 0.]]).type_as(self.bdry_lin_coef)): 
-            e_n_bdry = torch.tensor([[0, 0, -1]], device=x.device, dtype=x.dtype)# (1, 3)
-            e_t1_bdry = torch.tensor([[-1, 0, 0]], device=x.device, dtype=x.dtype)
-            e_t2_bdry = torch.tensor([[0, -1, 0]], device=x.device, dtype=x.dtype)
-            Jac = torch.zeros([n_cld, d, n_o, n_p, d], device=x.device, dtype=x.dtype)
-            for cid, (i, _) in enumerate(cld_bdry_ids):
-                Jac[n_cld_ij+cid, 0, i] = - e_n_bdry # (1, 3)
-                Jac[n_cld_ij+cid, 1, i] = - e_t1_bdry # (1, 3)
-                Jac[n_cld_ij+cid, 2, i] = - e_t2_bdry # (1, 3)
             return Jac
         else:
             raise NotImplementedError
@@ -242,7 +286,7 @@ class ImpulseSolver(nn.Module):
         L_T = L.t() # (n, n)
         L_T_J_e_T = (L_T @ J_e_T.reshape(n, d*C)).reshape(n*d, C)
         Q = (L_T_J_e_T @ M_e) @ L_T_J_e_T.t() # (n*d, n*d)
-        e, V = symeig1(Q)
+        e, V = symeig(Q)
         if not torch.allclose(e, (e>0.5).to(dtype=e.dtype), atol=1e-6):
             print(f"warning: eigenvalues is {e}")
         L_V_s = (L @ V[:, :n*d-C].reshape(n, d*(n*d-C))).reshape(n*d, n*d-C) # (n*d, n*d-C)

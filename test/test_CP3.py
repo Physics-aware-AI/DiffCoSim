@@ -16,7 +16,7 @@ from trainer import Model
 seed_everything(0)
 
 import matplotlib.pyplot as plt
-plt.switch_backend("TkAgg")
+# plt.switch_backend("TkAgg")
 
 def test_CP3_0():
     body_kwargs_file = "CP3_ground_homo_cor1_mu0"
@@ -46,5 +46,43 @@ def test_CP3_0():
 
     assert 1
 
+def test_CP3_0lcp():
+    body_kwargs_file = "CP3_ground_homo_cor1_mu0"
+    with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
+        body_kwargs = json.load(file)
+    body = ChainPendulumWithContact(body_kwargs_file, is_lcp_data=True, is_lcp_model=True, **body_kwargs)
+    dataset = RigidBodyDataset(
+        mode = "test",
+        n_traj = 10,
+        body = body,
+        dtype = torch.float32,
+        chunk_len = 100,
+        regen=True,
+    )
+
+    ani = body.animate(dataset.zs, 0)
+    ani.save(os.path.join(THIS_DIR, 'test_CP3_0lcp.gif'))
+
+    assert 1
+
+def test_CP3_1lcp():
+    body_kwargs_file = "CP3_ground_homo_cor0_mu0.5"
+    with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
+        body_kwargs = json.load(file)
+    body = ChainPendulumWithContact(body_kwargs_file,  is_lcp_data=True, is_lcp_model=True,**body_kwargs)
+    dataset = RigidBodyDataset(
+        mode = "test",
+        n_traj = 10,
+        body = body,
+        dtype = torch.float32,
+        chunk_len = 100,
+        regen=True,
+    )
+
+    ani = body.animate(dataset.zs, 1)
+    ani.save(os.path.join(THIS_DIR, 'test_CP3_1lcp.gif'))
+
+    assert 1
+
 if __name__ == "__main__":
-    test_CP3_0()
+    test_CP3_1lcp()

@@ -6,6 +6,7 @@ import torch
 import networkx as nx
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
+import matplotlib.pyplot as plt
 from models.impulse import ImpulseSolver
 from models.impulse_mujoco import ImpulseSolverMujoco
 
@@ -20,8 +21,8 @@ class ElasticRope(RigidBody):
         kwargs_file_name="default",
         n_o=10, 
         g=9.81,
-        ms=[0.1]*10, 
-        ls=[0.05]*10, 
+        ms=[0.1], 
+        ls=[0.05], 
         radii=[0.01], 
         mus=[0.0], 
         cors=[0.0], 
@@ -31,12 +32,14 @@ class ElasticRope(RigidBody):
         max_stretch=1.2,
         is_homo=True,
         is_mujoco_like=False,
+        is_lcp_data=False,
+        is_lcp_model=False,
         dtype=torch.float64
     ):
         assert is_homo and n_o >= 2
         self.kwargs_file_name = kwargs_file_name
-        self.ms = torch.tensor(ms, dtype=dtype)
-        self.ls = torch.tensor(ls, dtype=dtype)
+        self.ms = torch.tensor(ms*n_o, dtype=dtype)
+        self.ls = torch.tensor(ls*n_o, dtype=dtype)
         self.radii = torch.tensor(radii, dtype=dtype)
         self.g = g
         self.n_o, self.n_p, self.d = n_o, 1, 2
@@ -58,7 +61,7 @@ class ElasticRope(RigidBody):
         #     self.body_graph.add_extended_body(i, ms[i], d=0)
         #     self.body_graph.add_edge(i-1, i, l=ls[i])
         for i in range(0, n_o):
-            self.body_graph.add_extended_body(i, ms[i], d=0)
+            self.body_graph.add_extended_body(i, ms[0], d=0)
 
         if not is_mujoco_like:
             self.impulse_solver = ImpulseSolver(
@@ -93,6 +96,7 @@ class ElasticRope(RigidBody):
             return f"{self.__class__.__name__}{self.kwargs_file_name}_mujoco"
         else:
             return f"{self.__class__.__name__}{self.kwargs_file_name}"
+        # return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, x):
         # x: (bs, n, d)
@@ -252,18 +256,38 @@ class ElasticRope(RigidBody):
 class ElasticRopeAnimation(Animation):
     def __init__(self, qt, body):
         # qt: T, n, d
-        super().__init__(qt, body)
+        self.qt = qt.detach().cpu().numpy()
+        T, n, d = qt.shape
+        assert d in (2, 3)
+        self.fig = plt.figure()
+        self.ax = self.fig.add_axes([0, 0, 1, 1], projection='3d') if d==3 else self.fig.add_axes([0,0,1,1])
+
+        empty = d * [[]]
+        # self.colors = np.random.choice([f"C{i}" for i in range(15)], size=n, replace=False)
+        if body.n_o < 15:
+            self.colors = [f"C{i}" for i in range(15)]
+            self.objects = {
+                'pts': sum([self.ax.plot(*empty, ms=6, color=self.colors[i]) for i in range(n)], []),
+                'trails': sum([self.ax.plot(*empty, "-", color=self.colors[i]) for i in range(n)], [])
+            }
+        else:
+            self.objects = {
+                'pts': sum([self.ax.plot(*empty, ms=6, color='k') for i in range(n)], []),
+                'trails': sum([self.ax.plot(*empty, "-", color='gray') for i in range(n)], [])
+            }
         self.body = body
         self.n_o = body.n_o
         self.n_p = body.n_p
 
-        self.ax.set_xlim(-0.49, 0.49)
-        self.ax.set_ylim(-0.49, 0.49)
+        # self.ax.set_xlim(-0.53, 0.53)
+        # self.ax.set_ylim(-0.59, 0.47)
+        self.ax.set_xlim(-5, 5)
+        self.ax.set_ylim(-5, 5)
         self.ax.axis("off"),
         self.fig.set_size_inches(10.5, 10.5)
 
         self.G = body.body_graph
-        self.objects["links"] = sum([self.ax.plot([], [], "-", color='k', linewidth=4) for _ in range(self.n_o)], [])
+        self.objects["links"] = sum([self.ax.plot([], [], "-", color='k', linewidth=4.5) for _ in range(self.n_o)], [])
         self.objects["pts"] = sum(
             [self.ax.plot([], [], "o", ms=10*body.ms[i], c="tab:blue") for i in range(qt.shape[1])], []
         )

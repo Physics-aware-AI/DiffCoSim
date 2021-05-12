@@ -8,6 +8,7 @@ from matplotlib import collections as mc
 from matplotlib.patches import Circle
 from models.impulse import ImpulseSolver
 from models.impulse_mujoco import ImpulseSolverMujoco
+from baselines.lcp.impulse_lcp import ImpulseSolverLCP
 
 class ChainPendulumWithContact(RigidBody):
     dt = 0.01
@@ -26,10 +27,13 @@ class ChainPendulumWithContact(RigidBody):
         bdry_lin_coef=[[0, 1, 1]],
         is_homo=True,
         is_mujoco_like=False,
+        is_lcp_data=False,
+        is_lcp_model=False,
         dtype=torch.float64
     ):
         assert n_o == len(ms) == len(ls) == len(radii)
         assert is_homo
+        assert not (is_mujoco_like and is_lcp_model)
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=dtype)
@@ -50,9 +54,11 @@ class ChainPendulumWithContact(RigidBody):
         self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
         self.is_homo = is_homo
         self.is_mujoco_like = is_mujoco_like
+        self.is_lcp_model = is_lcp_model
+        self.is_lcp_data = is_lcp_data
 
-        if not is_mujoco_like:
-            self.impulse_solver = ImpulseSolver(
+        if is_lcp_model:
+            self.impulse_solver = ImpulseSolverLCP(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -63,7 +69,7 @@ class ChainPendulumWithContact(RigidBody):
                 cld_2did_to_1did = self.cld_2did_to_1did,
                 DPhi = self.DPhi
             )     
-        else:
+        elif is_mujoco_like:
             self.impulse_solver = ImpulseSolverMujoco(
                 dt = self.dt,
                 n_o = self.n_o,
@@ -74,14 +80,28 @@ class ChainPendulumWithContact(RigidBody):
                 check_collision = self.check_collision,
                 cld_2did_to_1did = self.cld_2did_to_1did,
                 DPhi = self.DPhi
-            )    
-
+            )   
+        else:
+            self.impulse_solver = ImpulseSolver(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = self.ls,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi
+            )   
 
     def __str__(self):
         if self.is_mujoco_like:
             return f"{self.__class__.__name__}{self.kwargs_file_name}_mujoco"
+        elif self.is_lcp_data:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}_lcp"
         else:
             return f"{self.__class__.__name__}{self.kwargs_file_name}"
+        # return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, x):
         M = self.M.to(dtype=x.dtype)
@@ -117,8 +137,8 @@ class ChainPendulumWithContact(RigidBody):
             [x, torch.ones(*x.shape[:-1], 1, dtype=x.dtype, device=x.device)],
             dim=-1
         ).unsqueeze(-2) # bs, n, 1, 3
-        dist = (x_one * coef).sum(-1) # bs, n, n_bdry
-        dist_bdry = dist - self.radii[:, None]
+        dist = (x_one * coef.type_as(x)).sum(-1) # bs, n, n_bdry
+        dist_bdry = dist - self.radii[:, None].type_as(x)
         is_collide_bdry = dist_bdry < 0 # bs, n, n_bdry
         is_collide = is_collide_bdry.sum([1, 2]) > 0
         return is_collide, is_collide_bdry, dist_bdry

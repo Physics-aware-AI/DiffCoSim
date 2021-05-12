@@ -16,6 +16,7 @@ class CLNNwC(nn.Module):
         num_layers: int = 3,
         device: torch.device = torch.device('cpu'),
         dtype: torch.dtype = torch.float32,
+        reg=0.01,
         **kwargs
     ):
         super().__init__()
@@ -46,6 +47,14 @@ class CLNNwC(nn.Module):
             self.cor_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
         self.is_homo = is_homo
 
+        if impulse_solver.__class__.__name__ == "ImpulseSolverMujoco":
+            if reg < 0:
+                # override the reg with a learnable parameter
+                self.reg = nn.Parameter(torch.randn(1, dtype=dtype))
+                impulse_solver.reg = self.reg
+            else:
+                impulse_solver.reg = reg
+
         self.impulse_solver = impulse_solver
 
     @property
@@ -61,6 +70,19 @@ class CLNNwC(nn.Module):
         blocks = blocks + torch.ones_like(blocks)
         blocks = blocks * inv_masses.unsqueeze(-1)
         return torch.block_diag(*blocks) # (n, n)
+
+    @property
+    def M(self):
+        n = self.n
+        d = int(list(self.m_params.keys())[0])
+        moments = torch.exp(self.m_params[str(d)]) # n_o, n_p
+        masses = moments[:, :1] # n_o, 1
+        if d == 0:
+            return torch.diag_embed(masses[:, 0])
+        blocks = torch.diag_embed(torch.cat([moments[:, 1:].sum(1, keepdim=True)+1, inv_moments[:, 1:]], dim=-1))
+        blocks[:, 1:, 0] = - moments[:, 1:]
+        blocks[:, 0, 1:] = - moments[:, 1:]
+        return torch.block_diag(*(blocks*masses[..., None]))
 
     @property
     def L_Minv(self):

@@ -33,7 +33,7 @@ from baselines.CLNN_MLP import CLNN_MLP
 from baselines.CLNN_CD_MLP import CLNN_CD_MLP
 from baselines.CLNN_IN import CLNN_IN
 from baselines.IN import IN
-# from find_bad_grad import BadGradFinder
+from find_bad_grad import BadGradFinder
 
 seed_everything(0)
 
@@ -58,6 +58,12 @@ class Model(pl.LightningModule):
             hparams.is_base_full = False
         if not hasattr(hparams, "noise_std"):
             hparams.noise_std = 0.0
+        if not hasattr(hparams, "reg"):
+            hparams.reg = 0.01
+        if not hasattr(hparams, "is_lcp_data"):
+            hparams.is_lcp_data = False
+        if not hasattr(hparams, "is_lcp_model"):
+            hparams.is_lcp_model = False
 
         if hparams.body_kwargs_file == "":
             body = str_to_class(hparams.body_class)()
@@ -66,6 +72,8 @@ class Model(pl.LightningModule):
                 body_kwargs = json.load(file)
             body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, 
                                                     is_mujoco_like=hparams.is_mujoco_like, 
+                                                    is_lcp_data=hparams.is_lcp_data,
+                                                    is_lcp_model=hparams.is_lcp_model,
                                                     **body_kwargs)
             vars(hparams).update(**body_kwargs)
         vars(hparams).update(
@@ -176,7 +184,22 @@ class Model(pl.LightningModule):
         logs = {"train/loss": loss, "train/nfe": self.model.nfe}
         self.log("train/loss", loss, prog_bar=True)
         self.log("train/nfe", self.model.nfe, prog_bar=True)
+        # self.bad_grad_finder = BadGradFinder()
+        # self.bad_grad_finder.register_hooks(loss)
+        # self.loss = loss
         return loss
+
+    # def on_after_backward(self):
+    #     # loss 
+    #     self.bad_grad_finder.make_dot(self.loss)
+
+    # def on_train_batch_end(self, outputs, batch, batch_idx, dataloader_idx):
+    #     self.bad_grad_finder.dot.save(
+    #         os.path.join(self.logger[0].log_dir, f"epoch{self.current_epoch}_batch{batch_idx}.dot")
+    #     )
+    #     self.bad_grad_finder.delete()
+    #     del self.bad_grad_finder
+
 
     def set_requires_grad(self, train_mu_cor, train_m_V):
         self.model.mu_params.requires_grad = train_mu_cor
@@ -268,6 +291,7 @@ class Model(pl.LightningModule):
         parser.add_argument("--n-test", type=int, default=100, help="number of test trajectories")
         parser.add_argument("--is-mujoco-like", action="store_true", default=False)
         parser.add_argument("--noise-std", type=float, default=0.0)
+        parser.add_argument("--is-lcp-data", action="store_true", default=False)
         # optimizer
         parser.add_argument("--chunk-len", type=int, default=5)
         parser.add_argument("--batch-size", type=int, default=200)
@@ -287,6 +311,8 @@ class Model(pl.LightningModule):
         parser.add_argument("--is-base-full", action="store_true", default=False)
         parser.add_argument("--tol", type=float, default=1e-7)
         parser.add_argument("--solver", type=str, default="rk4")
+        parser.add_argument("--reg", type=float, default=0.01)
+        parser.add_argument("--is-lcp-model", action="store_true", default=False)
     
         return parser
 
@@ -300,9 +326,10 @@ if __name__ == "__main__":
 
     is_mujoco = "_mujoco" if hparams.is_mujoco_like else ""
     is_base_full = "_base_full" if hparams.is_base_full else ""
-    noise_std_str = "" if hparams.noise_std_str < 0.0000001 else f"_{hparams.noise_std_str}"
+    noise_std_str = "" if hparams.noise_std < 0.0000001 else f"_{hparams.noise_std}"
+    is_lcp_model = "_lcp" if hparams.is_lcp_model else ""
     savedir = os.path.join(".", "logs", 
-                          hparams.body_kwargs_file + is_mujoco + f"_{hparams.network_class}" + is_base_full + f"_N{hparams.n_train}" + noise_std_str)
+                          hparams.body_kwargs_file + is_mujoco + f"_{hparams.network_class}" + is_base_full + is_lcp_model + f"_N{hparams.n_train}" + noise_std_str)
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=savedir, name='')
 
     checkpoint = ModelCheckpoint(monitor="train/loss",

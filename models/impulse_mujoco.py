@@ -1,10 +1,11 @@
 import fsspec, os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 from diffcp.cone_program import SolverError
-from symeig import symeig
+# from symeig import symeig
 from .impulse import ImpulseSolver
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,7 +19,8 @@ class ImpulseSolverMujoco(ImpulseSolver):
         ls, bdry_lin_coef, delta=None, 
         get_limit_e_for_Jac=None,
         get_3d_contact_point_c_tilde=None,
-        save_dir=os.path.join(PARENT_DIR, "tensors")
+        save_dir=os.path.join(PARENT_DIR, "tensors"),
+        reg=0.01,
     ):
         super().__init__(dt, n_o, n_p, d, 
         check_collision, cld_2did_to_1did, DPhi,  
@@ -26,6 +28,7 @@ class ImpulseSolverMujoco(ImpulseSolver):
         get_limit_e_for_Jac,
         get_3d_contact_point_c_tilde,
         save_dir)
+        self.reg = reg
 
     def get_dv_w_J_e(self, bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi):
         n_cld, d, n_o, n_p, _ = Jac.shape
@@ -51,7 +54,11 @@ class ImpulseSolverMujoco(ImpulseSolver):
         M_hat_inv = (Minv @ factor.reshape(n, d*n*d)).reshape(n*d, n*d)
         A = Jac.reshape(n_cld*d, n*d) @ M_hat_inv @ Jac.reshape(n_cld*d, n*d).t()
         
-        A_decom = torch.cholesky(A+torch.eye(A.shape[0]).type_as(A)*1e-2, upper=True)
+        if torch.is_tensor(self.reg):
+            reg = F.softplus(self.reg)
+        else:
+            reg = self.reg
+        A_decom = torch.cholesky(A+torch.eye(A.shape[0]).type_as(A)*reg, upper=True)
         # A_decom = V_s_T_L_T_Jac_T
         # make sure v_star is "valid", avoid unbounded cvx problem
         v_star_c = self.get_v_star_c_w_J_e(n_cld, n, d, v_star, Jac.reshape(n_cld*d, n*d), J_e)
@@ -108,7 +115,12 @@ class ImpulseSolverMujoco(ImpulseSolver):
         # A_decom = Minv_sqrt_Jac_T
         Minv_Jac_T = (Minv @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
         A = Jac.reshape(n_cld*d, n*d) @ Minv_Jac_T
-        A_decom = torch.cholesky(A+torch.eye(A.shape[0]).type_as(A)*1e-2, upper=True)
+
+        if torch.is_tensor(self.reg):
+            reg = F.softplus(self.reg)
+        else:
+            reg = self.reg
+        A_decom = torch.cholesky(A+torch.eye(A.shape[0]).type_as(A)*reg, upper=True)
         # make sure v_star is "valid", avoid unbounded cvx problem
         with torch.no_grad():
             if n_cld > n: # Jac is a tall matrix

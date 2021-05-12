@@ -7,6 +7,7 @@ from matplotlib import collections as mc
 from matplotlib.patches import Circle
 from models.impulse import ImpulseSolver
 from models.impulse_mujoco import ImpulseSolverMujoco
+from baselines.lcp.impulse_lcp import ImpulseSolverLCP
 
 class BouncingMassPoints(RigidBody):
     dt = 0.01
@@ -24,9 +25,12 @@ class BouncingMassPoints(RigidBody):
         bdry_lin_coef=[[1, 0, 0], [0, 1, 0], [-1, 0, 1], [0, -1, 1]],
         is_homo=False,
         is_mujoco_like=False,
+        is_lcp_data=False,
+        is_lcp_model=False,
         dtype=torch.float64
     ):
         assert n_o == len(ms) == len(ls)
+        assert not (is_mujoco_like and is_lcp_model)
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=torch.float64)
@@ -48,9 +52,23 @@ class BouncingMassPoints(RigidBody):
             self.cors = torch.tensor(cors, dtype=torch.float64)
         self.is_homo = is_homo
         self.is_mujoco_like = is_mujoco_like   
+        self.is_lcp_data = is_lcp_data
+        self.is_lcp_model = is_lcp_model
 
-        if not is_mujoco_like:
-            self.impulse_solver = ImpulseSolver(
+        if is_lcp_model:
+            self.impulse_solver = ImpulseSolverLCP(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = self.ls,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi
+            )
+        elif is_mujoco_like:
+            self.impulse_solver = ImpulseSolverMujoco(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -62,7 +80,7 @@ class BouncingMassPoints(RigidBody):
                 DPhi = self.DPhi
             )
         else:
-            self.impulse_solver = ImpulseSolverMujoco(
+            self.impulse_solver = ImpulseSolver(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -77,8 +95,11 @@ class BouncingMassPoints(RigidBody):
     def __str__(self):
         if self.is_mujoco_like:
             return f"{self.__class__.__name__}_{self.kwargs_file_name}_mujoco"
+        elif self.is_lcp_data:
+            return f"{self.__class__.__name__}_{self.kwargs_file_name}_lcp"
         else:
             return f"{self.__class__.__name__}_{self.kwargs_file_name}"
+        # return f"{self.__class__.__name__}_{self.kwargs_file_name}" 
     
     def potential(self, x):
         # x: (bs, n, d)

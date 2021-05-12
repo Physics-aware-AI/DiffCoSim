@@ -15,7 +15,7 @@ from trainer import Model
 seed_everything(0)
 
 import matplotlib.pyplot as plt
-plt.switch_backend("TkAgg")
+# plt.switch_backend("TkAgg")
 
 def test_BM2_0():
     body_kwargs_file = "BM2_homo_cor1_mu0"
@@ -36,5 +36,24 @@ def test_BM2_0():
 
     assert 1
 
+def test_BM2_1():
+    body_kwargs_file = "BM2_homo_cor1_mu0"
+    with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
+        body_kwargs = json.load(file)
+    body = BouncingMassPoints(body_kwargs_file, is_lcp=True, **body_kwargs)
+    dataset = RigidBodyDataset(
+        mode = "test",
+        n_traj = 10,
+        body = body,
+        dtype = torch.float32,
+        chunk_len = 100,
+        regen=True
+    )
+
+    ani = body.animate(dataset.zs, 1)
+    ani.save(os.path.join(THIS_DIR, 'test_BM2_1.gif'))
+
+    assert 1
+
 if __name__ == "__main__":
-    test_BM2_0()
+    test_BM2_1()

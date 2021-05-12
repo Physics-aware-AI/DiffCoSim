@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import networkx as nx
 from models.impulse_mujoco import ImpulseSolverMujoco
+from baselines.lcp.impulse_lcp import ImpulseSolverLCP
 
 class GyroscopeWithWall(RigidBody):
     dt = 0.02
@@ -26,8 +27,11 @@ class GyroscopeWithWall(RigidBody):
         offset=0.0,
         radius=0.3,
         is_mujoco_like=False,
+        is_lcp_model=False,
+        is_lcp_data=False,
         dtype=torch.float64
     ):
+        assert not (is_mujoco_like and is_lcp_model)
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.m = m
@@ -44,13 +48,29 @@ class GyroscopeWithWall(RigidBody):
         self.cors = torch.tensor(cors, dtype=torch.float64)
         self.is_homo = is_homo
         self.is_mujoco_like = is_mujoco_like
+        self.is_lcp_model = is_lcp_model
+        self.is_lcp_data = is_lcp_data
 
         self.delta = torch.tensor([[-1, 1, 0, 0], [-1, 0, 1, 0], [-1, 0, 0, 1]], dtype=torch.float64) # 3, 4
         self.offset = offset
         self.radius = radius
 
-        if not is_mujoco_like:
-            self.impulse_solver = ImpulseSolver(
+        if is_lcp_model:
+            self.impulse_solver = ImpulseSolverLCP(
+                dt = self.dt,
+                n_o = self.n_o,
+                n_p = self.n_p,
+                d = self.d,
+                ls = None,
+                bdry_lin_coef = self.bdry_lin_coef,
+                check_collision = self.check_collision,
+                cld_2did_to_1did = self.cld_2did_to_1did,
+                DPhi = self.DPhi,
+                delta=self.delta,
+                get_3d_contact_point_c_tilde=self.get_3d_contact_point_c_tilde
+            )
+        elif is_mujoco_like:
+            self.impulse_solver = ImpulseSolverMujoco(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -64,7 +84,7 @@ class GyroscopeWithWall(RigidBody):
                 get_3d_contact_point_c_tilde=self.get_3d_contact_point_c_tilde
             )
         else:
-            self.impulse_solver = ImpulseSolverMujoco(
+            self.impulse_solver = ImpulseSolver(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -81,8 +101,11 @@ class GyroscopeWithWall(RigidBody):
     def __str__(self):
         if self.is_mujoco_like:
             return f"{self.__class__.__name__}{self.kwargs_file_name}_mujoco"
+        elif self.is_lcp_data:
+            return f"{self.__class__.__name__}{self.kwargs_file_name}_lcp"
         else:
             return f"{self.__class__.__name__}{self.kwargs_file_name}"
+        # return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, r):
         M = self.M.to(dtype=r.dtype)
@@ -123,6 +146,7 @@ class GyroscopeWithWall(RigidBody):
         return c_tilde
 
     def get_bdry_cld_and_c_tilde(self, x):
+        # assume the coefficient are normalized
         bdry_lin_coef = self.bdry_lin_coef.type_as(x)
         delta = self.delta.type_as(x)
         # get the position of the mesh points on the rim of the cone
@@ -210,10 +234,10 @@ class GyroscopeAnimation(Animation):
         self.objects["lines"] = sum([self.ax.plot([], [], [], "-", c="k", zorder=5) for _ in range(2)], [])
         self.objects['trails'] = sum([self.ax.plot([], [], [], "-", color="teal", zorder=10) for i in range(1)], [])
 
-        self.ax.view_init(elev=20., azim=60)
-        self.ax.dist = 2.5
+        self.ax.view_init(elev=20., azim=10)
+        self.ax.dist = 5.8 
         self.ax.axis("off"),
-        self.fig.set_size_inches(10.5, 10.5)
+        self.fig.set_size_inches(11.5, 11.5)
 
     def update(self, i=0):
         e = self.body.delta.numpy() @ self.qt[i] # (3, 3)

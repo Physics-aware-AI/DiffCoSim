@@ -93,5 +93,27 @@ def test_BD5_1():
 
     assert 1
 
+def test_BD1_0lcp():
+    body_kwargs_file = "BD1_homo_cor0_mu0.5"
+    with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
+        body_kwargs = json.load(file)
+    body = BouncingDisks(body_kwargs_file, is_lcp=True, **body_kwargs)
+    dataset = RigidBodyDataset(
+        mode = "test",
+        n_traj = 2,
+        body = body,
+        dtype = torch.float32,
+        chunk_len = 100,
+        regen=True
+    )
+
+    ani = body.animate(dataset.zs, 0)
+    fig = plt.figure()
+    plt.plot(dataset.zs[0, :, 1, 0, 0])
+    plt.savefig(os.path.join(THIS_DIR, 'test_BD1_0lcp_vx.png'))
+    ani.save(os.path.join(THIS_DIR, 'test_BD1_0lcp.gif'))
+
+    assert 1
+
 if __name__ == "__main__":
-    test_BD5_0()
+    test_BD1_0lcp()

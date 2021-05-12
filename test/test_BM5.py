@@ -56,5 +56,24 @@ def test_BM5_1():
 
     assert 1
 
+def test_BM5_2():
+    body_kwargs_file = "BM5_hetero_g0"
+    with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
+        body_kwargs = json.load(file)
+    body = BouncingMassPoints(body_kwargs_file, is_lcp=True, **body_kwargs)
+    dataset = RigidBodyDataset(
+        mode = "test",
+        n_traj = 1,
+        body = body,
+        dtype = torch.float32,
+        chunk_len = 100,
+        regen=True
+    )
+
+    ani = body.animate(dataset.zs, 0)
+    ani.save(os.path.join(THIS_DIR, 'test_BM5_2.gif'))
+
+    assert 1
+
 if __name__ == "__main__":
-    test_BM5_0()
+    test_BM5_2()
