@@ -30,6 +30,7 @@ class ElasticRope(RigidBody):
         angle_limit=0.3,
         min_stretch=0.8,
         max_stretch=1.2,
+        spring_k = 50,
         is_homo=True,
         is_mujoco_like=False,
         is_lcp_data=False,
@@ -47,6 +48,7 @@ class ElasticRope(RigidBody):
         self.angle_limit = angle_limit
         self.min_stretch = min_stretch
         self.max_stretch = max_stretch
+        self.spring_k = spring_k
 
         self.bdry_lin_coef = torch.tensor(bdry_lin_coef, dtype=dtype)
         self.n_c = 2*n_o - 1 # bending and strectch
@@ -103,7 +105,7 @@ class ElasticRope(RigidBody):
         # output V: (bs,)
         M = self.M.to(dtype=x.dtype)
         actual_ls = self.get_actual_ls(x) # (bs, n)
-        spring_potential = (50 * (actual_ls - self.ls.type_as(actual_ls))**2).sum(1)
+        spring_potential = (self.spring_k * (actual_ls - self.ls.type_as(actual_ls))**2).sum(1)
         gravity_potential = self.g * (M @ x)[..., 1].sum(1) 
         return gravity_potential + spring_potential
 
