@@ -118,14 +118,14 @@ class RigidBody(object):
                 is_cld_T[:, i+1] = is_cld
         return xvT.reshape(bs, len(T), *xv0.shape[1:]), is_cld_T
 
-    def animate(self, zt, j=None):
+    def animate(self, zt, j=None, *args, **kwargs):
         # bs, T, 2, n, d
         if zt.ndim == 5:
             j = j if j is not None else np.random.randint(zt.shape[0])
             traj = zt[j, :, 0, :, :]
         else:
             traj = zt[:, 0, :, :]
-        anim = self.animator(traj, self)
+        anim = self.animator(traj, self, *args, **kwargs)
         return anim.animate()
 
     @property

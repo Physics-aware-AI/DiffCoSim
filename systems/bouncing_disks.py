@@ -206,7 +206,13 @@ class BouncingDisks(RigidBody):
 
     @property
     def animator(self):
-        return BouncingDisksAnimation
+        if self._animator is None:
+            self._animator = BouncingDisksAnimation
+        return self._animator
+    
+    @animator.setter
+    def animator(self, val):
+        self._animator = val
 
 class BouncingDisksAnimation(Animation):
     def __init__(self, qt, body):
@@ -253,3 +259,22 @@ class BouncingDisksAnimation(Animation):
 
         self.disk_orientation.set_segments(segments)
         return super().update(i)
+
+
+class ThrowAnimation(BouncingDisksAnimation):
+    def __init__(self, qt, body, task, target):
+        super().__init__(qt, body)
+        if task == "hit":
+            if isinstance(target, torch.Tensor):
+                target_pos = target.detach().cpu().numpy()
+            else:
+                target_pos = target
+            target_circle = Circle(
+                [[target_pos[0]], [target_pos[1]]], 
+                radius=body.ls[0], 
+                color="gray", 
+                linestyle="-",
+                linewidth=2,
+                fill=False,
+            )
+            self.ax.add_artist(target_circle)

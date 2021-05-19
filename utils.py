@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils import data as data
 from scipy.spatial.transform import Rotation
 
 class Animation():
@@ -55,6 +56,18 @@ class Animation():
     def animate(self):
         return animation.FuncAnimation(self.fig, self.update, frames=self.qt.shape[0],
                     interval=33, init_func=self.init, blit=True,)#.save("test.gif")#.to_html5_video()
+
+def dummy_dataloader():
+    # dummy dataloader for Lightning Module
+    dummy = data.DataLoader(
+        data.TensorDataset(
+            torch.Tensor(1, 1),
+            torch.Tensor(1, 1)
+        ),
+        batch_size=1,
+        shuffle=False
+    )
+    return dummy
 
 def Linear(chin, chout, zero_bias=False, orthogonal_init=False):
     linear = nn.Linear(chin, chout)
