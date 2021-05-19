@@ -18,11 +18,13 @@ class RigidBodyDataset(Dataset):
         chunk_len=5,
         regen=False,
         noise_std=0.0,
+        separate=False,
     ):
         super().__init__()
         self.mode = mode
         self.body = body
         self.noise_std = noise_std
+        self.separate = separate
         filename = os.path.join(
             root_dir, f"traj_{body}_N{n_traj}_{mode}.pt"
         )
@@ -31,7 +33,7 @@ class RigidBodyDataset(Dataset):
         else:
             print(f"generating trajectories (mode: {mode}), this might take a while...")
             seed_everything(0)
-            ts, zs, is_clds = self.generate_trajectory_data(n_traj)
+            ts, zs, is_clds = self.generate_trajectory_data(n_traj, separate=separate)
             os.makedirs(root_dir, exist_ok=True)
             torch.save((ts, zs, is_clds), filename)
         seed_everything(0)
@@ -46,7 +48,7 @@ class RigidBodyDataset(Dataset):
     def __getitem__(self, idx):
         return (self.zs[idx, 0], self.ts[idx]), self.zs[idx], self.is_clds[idx]
 
-    def generate_trajectory_data(self, n_traj):
+    def generate_trajectory_data(self, n_traj, separate=False):
         """
         return ts, zs
         ts: n_traj, traj_len
@@ -56,9 +58,18 @@ class RigidBodyDataset(Dataset):
         ts = torch.arange(
             0, self.body.integration_time, self.body.dt, device=z0s.device, dtype=z0s.dtype
         )
-        zs, is_clds = self.body.integrate(z0s, ts)
-        ts = ts.repeat(n_traj, 1)
-        return ts, zs, is_clds
+        if not separate:
+            zs, is_clds = self.body.integrate(z0s, ts)
+            ts = ts.repeat(n_traj, 1)
+            return ts, zs, is_clds
+        else:
+            zs, is_clds = [], []
+            for i in range(n_traj):
+                z, is_cld = self.body.integrate(z0s[i:i+1], ts)
+                zs.append(z)
+                is_clds.append(is_cld)
+            ts = ts.repeat(n_traj, 1)
+            return ts, torch.cat(zs, dim=0), torch.cat(is_clds, dim=0)
 
     def chunk_training_data(self, ts, zs, is_clds, chunk_len, p_cld=0.5):
         """ Randomly samples chunks of trajectory data, returns tensors shaped for training.

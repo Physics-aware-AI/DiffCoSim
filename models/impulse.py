@@ -17,6 +17,7 @@ class ImpulseSolver(nn.Module):
         ls, bdry_lin_coef, delta=None, 
         get_limit_e_for_Jac=None,
         get_3d_contact_point_c_tilde=None,
+        limit_idx_to_o_idx=None,
         save_dir=os.path.join(PARENT_DIR, "tensors")
     ):
         super().__init__()
@@ -37,6 +38,10 @@ class ImpulseSolver(nn.Module):
             self.register_buffer("delta", delta)
         self.get_limit_e_for_Jac = get_limit_e_for_Jac
         self.get_3d_contact_point_c_tilde = get_3d_contact_point_c_tilde
+        if limit_idx_to_o_idx is None:
+            self.limit_idx_to_o_idx = None
+        else:
+            self.register_buffer("limit_idx_to_o_idx", limit_idx_to_o_idx)
         self.save_dir = save_dir
 
     def add_impulse(self, xv, mus, cors, Minv):
@@ -49,8 +54,11 @@ class ImpulseSolver(nn.Module):
         if is_cld.sum() == 0:
             return xv, is_cld
         # for the rope tasks
-        if is_cld_limit.shape[1] > 0:
+        if is_cld_limit.shape[1] > 0 and d == 2:
             self.e_n_limit_for_Jac, self.e_t_limit_for_Jac = self.get_limit_e_for_Jac(x)
+        # for the cloth tasks
+        if is_cld_limit.shape[1] > 0 and d == 3:
+            self.e_n_limit_for_Jac, self.e_t1_limit_for_Jac, self.e_t2_limit_for_Jac = self.get_limit_e_for_Jac(x)
         # specifically for the gyroscope task
         if self.get_3d_contact_point_c_tilde is not None:
             self.contact_c_tilde = self.get_3d_contact_point_c_tilde(x)
@@ -190,15 +198,29 @@ class ImpulseSolver(nn.Module):
                 Jac[n_cld_ij+cid, 2, i, :] = - c_til_bdry_1[cid, :, None] * e_t2_bdry[cid, None, :]
             return Jac
         # the cloth experiment
-        elif torch.allclose(self.bdry_lin_coef, torch.tensor([[0., 0., 1., 0.]]).type_as(self.bdry_lin_coef)): 
-            e_n_bdry = torch.tensor([[0, 0, -1]], device=x.device, dtype=x.dtype)# (1, 3)
-            e_t1_bdry = torch.tensor([[-1, 0, 0]], device=x.device, dtype=x.dtype)
-            e_t2_bdry = torch.tensor([[0, -1, 0]], device=x.device, dtype=x.dtype)
+        # this is a bac condition, works for now
+        elif torch.allclose(self.bdry_lin_coef, torch.tensor([[0., 0., 0., 0.]]).type_as(self.bdry_lin_coef)): 
+            # limited support for the type "limit" now
             Jac = torch.zeros([n_cld, d, n_o, n_p, d], device=x.device, dtype=x.dtype)
-            for cid, (i, _) in enumerate(cld_bdry_ids):
-                Jac[n_cld_ij+cid, 0, i] = - e_n_bdry # (1, 3)
-                Jac[n_cld_ij+cid, 1, i] = - e_t1_bdry # (1, 3)
-                Jac[n_cld_ij+cid, 2, i] = - e_t2_bdry # (1, 3)
+            for cid, (i_limit, t_limit) in enumerate(cld_limit_ids):
+                # the length is calculated as that of node_j - node_i
+                node_j, node_i = self.limit_idx_to_o_idx[i_limit, 0], self.limit_idx_to_o_idx[i_limit, 1]
+                if t_limit == 0: # maximum stretch
+                    if i_limit >= 1:
+                        Jac[cid, 0, node_i] = self.e_n_limit_for_Jac[bs_idx, i_limit, None, :]
+                        Jac[cid, 1, node_i] = self.e_t1_limit_for_Jac[bs_idx, i_limit, None, :]
+                        Jac[cid, 2, node_i] = self.e_t2_limit_for_Jac[bs_idx, i_limit, None, :]
+                    Jac[cid, 0, node_j] = - self.e_n_limit_for_Jac[bs_idx, i_limit, None, :]
+                    Jac[cid, 1, node_j] = - self.e_t1_limit_for_Jac[bs_idx, i_limit, None, :]
+                    Jac[cid, 2, node_j] = - self.e_t2_limit_for_Jac[bs_idx, i_limit, None, :]
+                else: # minimum stretch
+                    if i_limit >= 1:
+                        Jac[cid, 0, node_i] = - self.e_n_limit_for_Jac[bs_idx, i_limit, None, :]
+                        Jac[cid, 1, node_i] = - self.e_t1_limit_for_Jac[bs_idx, i_limit, None, :]
+                        Jac[cid, 2, node_i] = - self.e_t2_limit_for_Jac[bs_idx, i_limit, None, :]
+                    Jac[cid, 0, node_j] = self.e_n_limit_for_Jac[bs_idx, i_limit, None, :]
+                    Jac[cid, 1, node_j] = self.e_t1_limit_for_Jac[bs_idx, i_limit, None, :]
+                    Jac[cid, 2, node_j] = self.e_t2_limit_for_Jac[bs_idx, i_limit, None, :]
             return Jac
         else:
             raise NotImplementedError
