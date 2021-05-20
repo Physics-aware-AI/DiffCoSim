@@ -29,6 +29,7 @@ from systems.chain_pendulum_with_contact import ChainPendulumWithContact
 from systems.rope_chain import RopeChain
 from systems.elastic_rope import ElasticRope
 from systems.gyroscope_with_wall import GyroscopeWithWall
+from systems.cloth import Cloth
 # from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
 from models.hamiltonian import CHNNwC
