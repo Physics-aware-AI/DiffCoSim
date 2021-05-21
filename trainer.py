@@ -212,20 +212,22 @@ class Model(pl.LightningModule):
             self.log("cor", cor, prog_bar=True)
 
     def on_after_backward(self):
-        # skip samples that cause inf/nan gradients/loss
-        # https://github.com/PyTorchLightning/pytorch-lightning/issues/4956
-        valid_gradients = True
-        for name, param in self.named_parameters():
-            if param.grad is not None:
-                valid_gradients = not (torch.isnan(param.grad).any() or torch.isinf(param.grad).any())
-                if not valid_gradients:
-                    break
+        # only skip samples that cause nan if we don't explicitly want to terminate when nan appears
+        if not self.hparams.terminate_on_nan:
+            # skip samples that cause inf/nan gradients/loss
+            # https://github.com/PyTorchLightning/pytorch-lightning/issues/4956
+            valid_gradients = True
+            for name, param in self.named_parameters():
+                if param.grad is not None:
+                    valid_gradients = not (torch.isnan(param.grad).any() or torch.isinf(param.grad).any())
+                    if not valid_gradients:
+                        break
 
-        if not valid_gradients:
-            log.warning(f'detected inf or nan values in gradients. not updating model parameters')
-            self.zero_grad()
-        # # loss 
-        # self.bad_grad_finder.make_dot(self.loss)
+            if not valid_gradients:
+                log.warning(f'detected inf or nan values in gradients. not updating model parameters')
+                self.zero_grad()
+            # # loss 
+            # self.bad_grad_finder.make_dot(self.loss)
 
     # def on_train_batch_end(self, outputs, batch, batch_idx, dataloader_idx):
     #     self.bad_grad_finder.dot.save(
@@ -374,7 +376,6 @@ if __name__ == "__main__":
 
     trainer = Trainer.from_argparse_args(hparams,
                                          deterministic=True,
-                                         terminate_on_nan=True,
                                          callbacks=[checkpoint],
                                          logger=[tb_logger])
 
