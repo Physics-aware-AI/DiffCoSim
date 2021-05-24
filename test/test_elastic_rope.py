@@ -53,13 +53,13 @@ def test_elastic_rope_1():
     assert 1
 
 def test_elastic_rope_2():
-    body_kwargs_file = "ER50"
+    body_kwargs_file = "ER50k50"
     with open(os.path.join(PARENT_DIR, "examples", body_kwargs_file + ".json")) as file:
         body_kwargs = json.load(file)
     body = ElasticRope(body_kwargs_file, **body_kwargs)
     dataset = RigidBodyDataset(
         mode = "train",
-        n_traj = 800,
+        n_traj = 10,
         body = body,
         dtype = torch.float32,
         chunk_len = 20,
@@ -68,9 +68,9 @@ def test_elastic_rope_2():
 
     print(torch.isfinite(dataset.zs).all())
 
-    for i in range(800):
-        ani = body.animate(dataset.zs, i)
-        ani.save(os.path.join(THIS_DIR, f'ER50_{i}.gif'), writer='pillow')
+    # for i in range(800):
+    #     ani = body.animate(dataset.zs, i)
+    #     ani.save(os.path.join(THIS_DIR, f'ER50_{i}.gif'), writer='pillow')
 
     assert 1
 

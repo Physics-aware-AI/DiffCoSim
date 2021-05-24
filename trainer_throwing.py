@@ -114,8 +114,6 @@ class Model(pl.LightningModule):
         self.potential = body.potential
         self.Minv_op = body.Minv_op
         ##############
-        # self.Minv_op = lambda p: self.Minv.to(p.device, p.dtype) @ p
-
         self.dynamics = ConstrainedLagrangianDynamics(
             self.potential,
             self.Minv_op,
@@ -300,7 +298,7 @@ class Model(pl.LightningModule):
         parser.set_defaults(SGDR=True)
         # model
         parser.add_argument("--solver", type=str, default="rk4")
-        parser.add_argument("--learned-model-path", type=str, default="")
+        # parser.add_argument("--learned-model-path", type=str, default="")
     
         return parser
 
@@ -314,7 +312,7 @@ if __name__ == "__main__":
 
     is_mujoco = "_mujoco" if hparams.is_mujoco_like else ""
     is_lcp_model = "_lcp" if hparams.is_lcp_model else ""
-    is_learned_model = "_learned" if hparams.learned_model_path else ""
+    is_learned_model = "_learned" if hparams.ckpt_path else ""
     savedir = os.path.join(".", "logs", 
                           hparams.task + "_" + hparams.body_kwargs_file + is_mujoco + is_lcp_model)
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=savedir, name='')

@@ -54,30 +54,31 @@ class CLNN_IN(CLNNwC):
         # assert len(ts) == 2
 
         bs= z0.shape[0]
+        with torch.enable_grad():
+            z0 = torch.zeros_like(z0, requires_grad=True) + z0
+            zt = z0.reshape(bs, -1)
+            zT = torch.zeros([bs, len(ts), zt.shape[1]]).type_as(z0)
+            zT[:, 0] = zt
 
-        zt = z0.reshape(bs, -1)
-        zT = torch.zeros([bs, len(ts), zt.shape[1]]).type_as(z0)
-        zT[:, 0] = zt
+            # get mass
+            # inv_moments = self.get_inv_moments()
+            d = int(list(self.m_params.keys())[0])
+            inv_moments = torch.exp(-self.m_params[str(d)]).reshape(-1) # n_o*n_p
+            for i in range(len(ts)-1):
+                zt_n = odeint(self, zt, ts[i:i+2], rtol=tol, method="rk4")[1]
+                zt_n = zt_n.reshape(bs, 2, self.n, self.d)
+                xt_n = zt_n[:, 0] ; vt_n = zt_n[:, 1]
 
-        # get mass
-        # inv_moments = self.get_inv_moments()
-        d = int(list(self.m_params.keys())[0])
-        inv_moments = torch.exp(-self.m_params[str(d)]).reshape(-1) # n_o*n_p
-        for i in range(len(ts)-1):
-            zt_n = odeint(self, zt, ts[i:i+2], rtol=tol, method="rk4")[1]
-            zt_n = zt_n.reshape(bs, 2, self.n, self.d)
-            xt_n = zt_n[:, 0] ; vt_n = zt_n[:, 1]
+                # add walls
+                # get potential velocity
+                V = self.potential(xt_n)
+                dV = torch.autograd.grad(V.sum(), xt_n, create_graph=True)[0] # bs, n, d
 
-            # add walls
-            # get potential velocity
-            V = self.potential(xt_n)
-            dV = torch.autograd.grad(V.sum(), xt_n, create_graph=True)[0] # bs, n, d
-
-            delta_v = self.velocity_impulse(zt_n, inv_moments, dV)
-            vt_n = vt_n + delta_v.reshape(bs, self.n, self.d)
-            zt_n = torch.stack([xt_n, vt_n], dim=1).reshape(bs, -1)
-            zt = zt_n
-            zT[:, i+1] = zt
+                delta_v = self.velocity_impulse(zt_n, inv_moments, dV)
+                vt_n = vt_n + delta_v.reshape(bs, self.n, self.d)
+                zt_n = torch.stack([xt_n, vt_n], dim=1).reshape(bs, -1)
+                zt = zt_n
+                zT[:, i+1] = zt
         return zT.reshape(bs, len(ts), 2, self.n, self.d)
 
     # def get_inv_moments(self):

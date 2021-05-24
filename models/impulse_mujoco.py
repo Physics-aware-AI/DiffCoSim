@@ -19,6 +19,7 @@ class ImpulseSolverMujoco(ImpulseSolver):
         ls, bdry_lin_coef, delta=None, 
         get_limit_e_for_Jac=None,
         get_3d_contact_point_c_tilde=None,
+        limit_idx_to_o_idx=None,
         save_dir=os.path.join(PARENT_DIR, "tensors"),
         reg=0.01,
     ):
@@ -27,6 +28,7 @@ class ImpulseSolverMujoco(ImpulseSolver):
         ls, bdry_lin_coef, delta, 
         get_limit_e_for_Jac,
         get_3d_contact_point_c_tilde,
+        limit_idx_to_o_idx,
         save_dir)
         self.reg = reg
 

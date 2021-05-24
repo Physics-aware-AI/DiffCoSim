@@ -169,23 +169,26 @@ class Model(pl.LightningModule):
             assert zts.shape == (bs*(T-1), 2, 2, n, d) and ts.shape == (bs, 2)
 
         ts = ts[0] - ts[0,0]
-        if not self.hparams.train_separate:
-            pred_zts = self.model.integrate(z0, ts, tol=self.hparams.tol, method=self.hparams.solver)
-            loss = self.traj_mae(pred_zts, zts)
-        else:
-            # These are note recommended
-            raise NotImplementedError
-            if self.current_epoch > self.hparams.mu_cor_start_epoch and self.current_epoch % 2: # train mu cor
-                self.set_requires_grad(train_mu_cor=True, train_m_V=False)
-                inds = torch.nonzero(is_clds, as_tuple=False)[:, 0]
-            else: # train m and V
-                self.set_requires_grad(train_mu_cor=False, train_m_V=True)
-                inds = torch.nonzero(torch.logical_not(is_clds), as_tuple=False)[:, 0]
-            if len(inds) > 0:
-                pred_zts = self.model.integrate(z0[inds], ts, tol=self.hparams.tol, method=self.hparams.solver)
-                loss = self.traj_mae(pred_zts, zts[inds])
-            else:
-                return None
+
+        pred_zts = self.model.integrate(z0, ts, tol=self.hparams.tol, method=self.hparams.solver)
+        loss = self.traj_mae(pred_zts, zts)
+        # if not self.hparams.train_separate:
+        #     pred_zts = self.model.integrate(z0, ts, tol=self.hparams.tol, method=self.hparams.solver)
+        #     loss = self.traj_mae(pred_zts, zts)
+        # else:
+        #     # These are note recommended
+        #     raise NotImplementedError
+        #     if self.current_epoch > self.hparams.mu_cor_start_epoch and self.current_epoch % 2: # train mu cor
+        #         self.set_requires_grad(train_mu_cor=True, train_m_V=False)
+        #         inds = torch.nonzero(is_clds, as_tuple=False)[:, 0]
+        #     else: # train m and V
+        #         self.set_requires_grad(train_mu_cor=False, train_m_V=True)
+        #         inds = torch.nonzero(torch.logical_not(is_clds), as_tuple=False)[:, 0]
+        #     if len(inds) > 0:
+        #         pred_zts = self.model.integrate(z0[inds], ts, tol=self.hparams.tol, method=self.hparams.solver)
+        #         loss = self.traj_mae(pred_zts, zts[inds])
+        #     else:
+        #         return None
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -205,7 +208,7 @@ class Model(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         val_loss = reduce(add, outputs) / len(outputs)
         self.log("val/loss", val_loss, prog_bar=True)
-        if self.body.is_homo:
+        if self.body.is_homo and self.hparams.network_class in ['CLNNwC', 'CHNNwC']:
             mu = F.relu(self.model.mu_params)
             cor = F.hardsigmoid(self.model.cor_params)
             self.log("mu", mu, prog_bar=True)
@@ -377,7 +380,10 @@ if __name__ == "__main__":
     trainer = Trainer.from_argparse_args(hparams,
                                          deterministic=True,
                                          callbacks=[checkpoint],
-                                         logger=[tb_logger])
+                                         logger=[tb_logger],
+                                        #  profiler="simple",
+                                        #  max_epochs=1
+                                        )
 
     trainer.fit(model)
 
