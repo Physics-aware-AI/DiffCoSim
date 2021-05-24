@@ -41,7 +41,8 @@ class IN(CLNNwC):
         self.velocity_impulse = InteractionNetwork(body, R_net_hidden_size, O_net_hidden_size)
         is_mass_point = "BM" in self.body.kwargs_file_name or \
                         "CP" in self.body.kwargs_file_name or \
-                        "ER" in self.body.kwargs_file_name
+                        "ER" in self.body.kwargs_file_name or \
+                        "Cloth" in self.body.kwargs_file_name
         if is_mass_point:
             self.inv_moments = torch.div(1, self.body.ms)
         elif "BD" in self.body.kwargs_file_name:
@@ -57,6 +58,8 @@ class IN(CLNNwC):
                 dim=0
             )
             self.inv_moments = torch.div(1, m_and_m)
+        else:
+            raise NotImplementedError
 
     def get_f_external(self, bs, n, d):
         # f_external (bs, n, d)
@@ -65,7 +68,7 @@ class IN(CLNNwC):
         elif "BD" in self.body.kwargs_file_name:
             return torch.zeros(bs, n, d)
         elif "CP" in self.body.kwargs_file_name:
-            inv_moments = torch.div(1, self.body.ms)
+            # inv_moments = torch.div(1, self.body.ms)
             g = self.body.g
             f_external = torch.stack(
                 [torch.zeros(bs, n), -g * self.body.ms * torch.ones(bs, n)],
@@ -74,7 +77,7 @@ class IN(CLNNwC):
             return f_external
         elif "ER" in self.body.kwargs_file_name:
             g = self.body.g
-            inv_moments = torch.div(1, self.body.ms)
+            # inv_moments = torch.div(1, self.body.ms)
             f_external = torch.stack(
                 [torch.zeros(bs, n), -g * self.body.ms * torch.ones(bs, n)],
                 dim=-1
@@ -84,6 +87,15 @@ class IN(CLNNwC):
             f_external = torch.zeros(bs, 4, 3)
             f_external[:, 0, 2] = f_external[:, 0, 2] - self.body.m * 9.81
             return f_external
+        elif "Cloth" in self.body.kwargs_file_name:
+            g = self.body.g
+            f_external = torch.stack(
+                [torch.zeros(bs, n), torch.zeros(bs, n), -g * self.body.ms * torch.ones(bs, n)],
+                dim=-1
+            )
+            return f_external
+        else:
+            raise NotImplementedError
 
     def integrate(self, z0, ts, tol=1e-4, method="rk4"):
         """
