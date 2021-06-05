@@ -234,8 +234,12 @@ class GyroscopeAnimation(Animation):
         self.objects["lines"] = sum([self.ax.plot([], [], [], "-", c="k", zorder=5) for _ in range(2)], [])
         self.objects['trails'] = sum([self.ax.plot([], [], [], "-", color="teal", zorder=10) for i in range(1)], [])
 
-        self.ax.view_init(elev=20., azim=10)
+        # self.ax.view_init(elev=20., azim=10)
+        self.ax.view_init(elev=20., azim=-1)
         self.ax.dist = 5.8 
+        self.ax.set_xlim3d(-1.2*corner, 1.2*corner)
+        self.ax.set_ylim3d(-1.2*corner, 1.2*corner)
+        self.ax.set_zlim3d(-1.2*corner, 1.2*corner)
         self.ax.axis("off"),
         self.fig.set_size_inches(11.5, 11.5)
 
