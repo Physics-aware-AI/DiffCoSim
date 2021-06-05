@@ -262,8 +262,22 @@ class BouncingDisksAnimation(Animation):
 
 
 class ThrowAnimation(BouncingDisksAnimation):
-    def __init__(self, qt, body, task, target):
+    def __init__(self, qt, body, task, target, init_pos):
         super().__init__(qt, body)
+        # initial position should be present for both tasks
+        if isinstance(init_pos, torch.Tensor):
+            init_pos = init_pos.detach().cpu().numpy()
+
+        init_circle = Circle(
+            [[init_pos[0]], [init_pos[1]]],
+            radius=body.ls[0],
+            color=self.colors[0],
+            linestyle="-",
+            linewidth=7,
+            fill=False
+        )
+        self.ax.add_artist(init_circle)
+
         if task == "hit":
             if isinstance(target, torch.Tensor):
                 target_pos = target.detach().cpu().numpy()
@@ -272,9 +286,27 @@ class ThrowAnimation(BouncingDisksAnimation):
             target_circle = Circle(
                 [[target_pos[0]], [target_pos[1]]], 
                 radius=body.ls[0], 
-                color="gray", 
-                linestyle="-",
-                linewidth=2,
+                color="k", 
+                linestyle="--",
+                linewidth=6,
                 fill=False,
             )
             self.ax.add_artist(target_circle)
+        # this part is coded based on qt
+        if task == "vertical":
+            for t in range(qt.shape[0]):
+                y = self.qt[t, 0, 1] 
+                if y < 0.5 and y > self.qt[t-1, 0, 1]:
+                    break
+            self.ax.plot(
+                self.qt[0:t, 0, 0], self.qt[0:t, 0, 1], 
+                linestyle="--",
+                linewidth=7,
+                color=self.colors[0]
+            )
+            self.ax.plot(
+                self.qt[t-1, 0, 0] * np.ones(2,), self.qt[t-1, 0, 1] + np.linspace(0, 0.25, 2), 
+                linestyle="--",
+                linewidth=7,
+                color='k'
+            )

@@ -254,7 +254,7 @@ class Model(pl.LightningModule):
             self.log('vx0', self.initial_velocity[0], prog_bar=True)
             self.log('vy0', self.initial_velocity[1], prog_bar=True)
             self.log('w0', self.initial_velocity[2], prog_bar=True)
-            self.history.append(self.initial_velocity.detach())
+            self.history.append(self.initial_velocity.clone().detach().cpu().numpy())
         return scaler_loss
 
     def test_step(self, batch, batch_idx):

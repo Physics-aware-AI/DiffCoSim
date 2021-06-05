@@ -201,10 +201,10 @@ class BilliardsAnimation(Animation):
         # self.objects["pts"] = sum(
         #     [self.ax.plot(*empty, c=self.colors[i]) for i in range(0, qt.shape[1])], []
         # )
-        self.circles = [Circle([[0], [0]], body.ls[0], color='#CCCCCC')] + \
-            [Circle([[0], [0]], body.ls[i], color='#F20530') for i in range(1, qt.shape[1]-1)] + \
-            [Circle([[0], [0]], body.ls[-1], color="#3344cc")] + \
-            [Circle([[self.body.goal[0]], [self.body.goal[1]]], body.ls[0]/2, color='#000000')] # this is the goal
+        self.circles = [Circle([[0], [0]], body.ls[0], color='#CCCCCC', lw=None)] + \
+            [Circle([[0], [0]], body.ls[i], color='#F20530', lw=None) for i in range(1, qt.shape[1]-1)] + \
+            [Circle([[0], [0]], body.ls[-1], color="#3344cc", lw=None)] + \
+            [Circle([[self.body.goal[0]], [self.body.goal[1]]], body.ls[0]/2, color='#000000', lw=None)] # this is the goal
 
         [self.ax.add_artist(circle) for circle in self.circles]
 
@@ -226,3 +226,23 @@ class BilliardsAnimation(Animation):
     # def animate(self):
     #     return animation.FuncAnimation(self.fig, self.update, frames=self.qt.shape[0],
     #                 interval=64, init_func=self.init, blit=True,)#.save("test.gif")#.to_html5_video()
+
+
+class BilliardsDummyAnimation(BilliardsAnimation):
+    def __init__(self, qt, body, vx, vy):
+        super().__init__(qt, body)
+        # self.ax.set_xlim(-0.05, 1.0)
+        # self.ax.set_ylim(0.35, 0.8)
+        self.ax.set_xlim(-0.1, 1)
+        self.ax.set_ylim(-0.05, 1.05)
+
+        self.initial_circle = Circle(
+            [[0.1], [0.5]], body.ls[0], color='#CCCCCC', fill=False, linestyle="--", linewidth=4
+        )
+        self.ax.add_artist(self.initial_circle)
+        self.ax.arrow(0.1, 0.5, 0.3/3, 0.0/3, color='#CCCCCC',
+            head_width=0.015, head_length=0.03, linestyle="--", linewidth=4, zorder=10
+        )
+        self.ax.arrow(qt[0, 0, 0], qt[0, 0, 1], vx/3, vy/3, color='#CCCCCC',
+            head_width=0.015, head_length=0.03, linestyle="-", linewidth=4, zorder=10
+        )
