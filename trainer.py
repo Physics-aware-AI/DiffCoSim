@@ -172,32 +172,11 @@ class Model(pl.LightningModule):
 
         pred_zts = self.model.integrate(z0, ts, tol=self.hparams.tol, method=self.hparams.solver)
         loss = self.traj_mae(pred_zts, zts)
-        # if not self.hparams.train_separate:
-        #     pred_zts = self.model.integrate(z0, ts, tol=self.hparams.tol, method=self.hparams.solver)
-        #     loss = self.traj_mae(pred_zts, zts)
-        # else:
-        #     # These are note recommended
-        #     raise NotImplementedError
-        #     if self.current_epoch > self.hparams.mu_cor_start_epoch and self.current_epoch % 2: # train mu cor
-        #         self.set_requires_grad(train_mu_cor=True, train_m_V=False)
-        #         inds = torch.nonzero(is_clds, as_tuple=False)[:, 0]
-        #     else: # train m and V
-        #         self.set_requires_grad(train_mu_cor=False, train_m_V=True)
-        #         inds = torch.nonzero(torch.logical_not(is_clds), as_tuple=False)[:, 0]
-        #     if len(inds) > 0:
-        #         pred_zts = self.model.integrate(z0[inds], ts, tol=self.hparams.tol, method=self.hparams.solver)
-        #         loss = self.traj_mae(pred_zts, zts[inds])
-        #     else:
-        #         return None
         return loss
 
     def training_step(self, batch, batch_idx):
         loss = self.one_batch(batch, batch_idx)
         self.log("train/loss", loss, prog_bar=True)
-        # self.log("train/nfe", self.model.nfe, prog_bar=True)
-        # self.bad_grad_finder = BadGradFinder()
-        # self.bad_grad_finder.register_hooks(loss)
-        # self.loss = loss
         return loss
     
     def validation_step(self, batch, batch_idx):
@@ -229,16 +208,6 @@ class Model(pl.LightningModule):
             if not valid_gradients:
                 log.warning(f'detected inf or nan values in gradients. not updating model parameters')
                 self.zero_grad()
-            # # loss 
-            # self.bad_grad_finder.make_dot(self.loss)
-
-    # def on_train_batch_end(self, outputs, batch, batch_idx, dataloader_idx):
-    #     self.bad_grad_finder.dot.save(
-    #         os.path.join(self.logger[0].log_dir, f"epoch{self.current_epoch}_batch{batch_idx}.dot")
-    #     )
-    #     self.bad_grad_finder.delete()
-    #     del self.bad_grad_finder
-
 
     def set_requires_grad(self, train_mu_cor, train_m_V):
         self.model.mu_params.requires_grad = train_mu_cor
@@ -249,7 +218,7 @@ class Model(pl.LightningModule):
             param.requires_grad = train_m_V
 
     def test_step(self, batch, batch_idx, integration_time=None):
-        (z0, _), _, _ = batch
+        (z0, _), zT, _ = batch
         if integration_time is None:
             integration_time = max(self.body.integration_time, self.body.dt*100)
         ts = torch.arange(0.0, integration_time, self.body.dt).type_as(z0)
@@ -333,13 +302,13 @@ class Model(pl.LightningModule):
         parser.add_argument("--is-lcp-data", action="store_true", default=False)
         # optimizer
         parser.add_argument("--chunk-len", type=int, default=5)
-        parser.add_argument("--batch-size", type=int, default=200)
+        parser.add_argument("--batch-size", type=int, default=1)
         parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
         parser.add_argument("--optimizer-class", type=str, default="AdamW")
         parser.add_argument("--weight-decay", type=float, default=1e-4)
         parser.add_argument("--SGDR", action="store_true", default=False)
-        parser.add_argument("--train-separate", action="store_true", default=False)
-        parser.add_argument("--mu-cor-start-epoch", type=int, default=0)
+        parser.add_argument("--train-separate", action="store_true", default=False) # this argument is deprecated
+        parser.add_argument("--mu-cor-start-epoch", type=int, default=0) # this argument is deprecated
         # model
         parser.add_argument("--hidden-size", type=int, default=256, help="number of hidden units")
         parser.add_argument("--num-layers", type=int, default=3, help="number of hidden layers")
