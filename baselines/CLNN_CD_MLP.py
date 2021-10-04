@@ -56,7 +56,7 @@ class CLNN_CD_MLP(CLNNwC):
         zT = torch.zeros([bs, len(ts), zt.shape[1]]).type_as(z0)
         zT[:, 0] = zt
         for i in range(len(ts)-1):
-            zt_n = odeint(self, zt, ts[i:i+2], rtol=tol, method="rk4")[1]
+            zt_n = odeint(self, zt, ts[i:i+2], rtol=tol, method=method)[1]
             # delta_v = self.velocity_impulse(z1)
             zt_n = zt_n.reshape(bs, 2, self.n, self.d)
             xt_n = zt_n[:, 0] ; vt_n = zt_n[:, 1]

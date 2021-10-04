@@ -36,9 +36,31 @@
 # print(D_Phi)
 # print(I - J * D_Phi.T * (D_Phi * J * D_Phi.T)**(-1) * D_Phi)
 
+# import cvxpy as cp
+# import torch
+# from cvxpylayers.torch import CvxpyLayer
+# x = cp.Variable((2, 1))
+# A_d_p = cp.Parameter((2, 2))
+# objective = cp.Minimize(cp.sum_squares(A_d_p @ x))
+# problem = cp.Problem(objective)
+# layer = CvxpyLayer(problem, parameters=[A_d_p], variables=[x])
+# A_d = torch.tensor([[0, 0], [0, 1]])
+# solution, = layer(A_d)
+# print(solution)
+# print(solution.grad)
+
 import cvxpy as cp
 import torch
 from cvxpylayers.torch import CvxpyLayer
+x = cp.Variable((2, 1))
+A_d_p = cp.Parameter((2, 1))
+objective = cp.Minimize(cp.sum_squares(cp.multiply(A_d_p, x)))
+problem = cp.Problem(objective)
+layer = CvxpyLayer(problem, parameters=[A_d_p], variables=[x])
+A_d = torch.tensor([[2], [1]])
+solution, = layer(A_d)
+print(solution)
+
 
 ######################################
 # example of a ball without rotation
@@ -171,8 +193,8 @@ from cvxpylayers.torch import CvxpyLayer
 # cvxpylayer = CvxpyLayer(problem, parameters=[A_decom, v_, mu], variables=[f])
 
 # A_sqrt_tch = torch.cholesky(A)
-v_tch = torch.tensor([1, -2], dtype=torch.float32).reshape(2, 1)
-mu_tch = torch.tensor([1, 1], dtype=torch.float32).reshape(2, 1)
+# v_tch = torch.tensor([1, -2], dtype=torch.float32).reshape(2, 1)
+# mu_tch = torch.tensor([1, 1], dtype=torch.float32).reshape(2, 1)
 
 # solution, = cvxpylayer(Minv_sqrt_Jac_T, (Jac.reshape(4, 2) @ v_tch).reshape(4, 1), mu_tch)
 
@@ -242,25 +264,25 @@ mu_tch = torch.tensor([1, 1], dtype=torch.float32).reshape(2, 1)
 
 ##############################################
 # animation
-from datasets.datasets import RigidBodyDataset
-from systems.bouncing_mass_points import BouncingMassPoints
-from systems.chain_pendulum_with_wall import ChainPendulum_w_Wall
-from pytorch_lightning import seed_everything
+# from datasets.datasets import RigidBodyDataset
+# from systems.bouncing_mass_points import BouncingMassPoints
+# from systems.chain_pendulum_with_wall import ChainPendulum_w_Wall
+# from pytorch_lightning import seed_everything
 
-seed_everything(0)
+# seed_everything(0)
 
-import matplotlib.pyplot as plt
-plt.switch_backend("TkAgg")
+# import matplotlib.pyplot as plt
+# plt.switch_backend("TkAgg")
 
-body = BouncingMassPoints(n_balls=2, m=0.1, l=0.1, mu=0.0, cor=0.0)
+# body = BouncingMassPoints(n_balls=2, m=0.1, l=0.1, mu=0.0, cor=0.0)
 # body = ChainPendulum_w_Wall(n_links=1, m=1, l=2.0, mu=0.1, lb=1.1, rb=1.1)
-dataset = RigidBodyDataset(body=body, n_traj=20, chunk_len=200, regen=True)
+# dataset = RigidBodyDataset(body=body, n_traj=20, chunk_len=200, regen=True)
 
 # plt.plot(dataset.zs[0, :, 1, 0, 1])
 # plt.show()
 
-ani = body.animate(dataset.zs, 7)
-ani.save(f"test.gif")
+# ani = body.animate(dataset.zs, 7)
+# ani.save(f"test.gif")
 
 #################################33
 

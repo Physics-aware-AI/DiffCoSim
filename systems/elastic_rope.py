@@ -283,6 +283,8 @@ class ElasticRopeAnimation(Animation):
 
         # self.ax.set_xlim(-0.53, 0.53)
         # self.ax.set_ylim(-0.59, 0.47)
+        # self.ax.set_xlim(-0.1, 0.53)
+        # self.ax.set_ylim(-0.2, 0.47)
         self.ax.set_xlim(-5, 5)
         self.ax.set_ylim(-5, 5)
         self.ax.axis("off"),

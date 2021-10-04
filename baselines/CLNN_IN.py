@@ -65,7 +65,7 @@ class CLNN_IN(CLNNwC):
             d = int(list(self.m_params.keys())[0])
             inv_moments = torch.exp(-self.m_params[str(d)]).reshape(-1) # n_o*n_p
             for i in range(len(ts)-1):
-                zt_n = odeint(self, zt, ts[i:i+2], rtol=tol, method="rk4")[1]
+                zt_n = odeint(self, zt, ts[i:i+2], rtol=tol, method=method)[1]
                 zt_n = zt_n.reshape(bs, 2, self.n, self.d)
                 xt_n = zt_n[:, 0] ; vt_n = zt_n[:, 1]
 
