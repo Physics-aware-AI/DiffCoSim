@@ -186,7 +186,8 @@ class ImpulseSolver(nn.Module):
                     
             return Jac
         # the gyroscope experiment
-        elif torch.allclose(self.bdry_lin_coef, torch.tensor([[0., 1., 0., 0.]]).type_as(self.bdry_lin_coef)): 
+        # this is a bad condition, works for now
+        elif torch.allclose(self.bdry_lin_coef, torch.tensor([[0., 1., 0., 0.33]]).type_as(self.bdry_lin_coef)): 
             e_n_bdry = torch.tensor([[0, -1, 0]]).type_as(x) # (3)
             e_t1_bdry = torch.tensor([[-1, 0, 0]]).type_as(x)
             e_t2_bdry = torch.tensor([[0, 0, -1]]).type_as(x)
@@ -198,7 +199,7 @@ class ImpulseSolver(nn.Module):
                 Jac[n_cld_ij+cid, 2, i, :] = - c_til_bdry_1[cid, :, None] * e_t2_bdry[cid, None, :]
             return Jac
         # the cloth experiment
-        # this is a bac condition, works for now
+        # this is a bad condition, works for now
         elif torch.allclose(self.bdry_lin_coef, torch.tensor([[0., 0., 0., 0.]]).type_as(self.bdry_lin_coef)): 
             # limited support for the type "limit" now
             Jac = torch.zeros([n_cld, d, n_o, n_p, d], device=x.device, dtype=x.dtype)
