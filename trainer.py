@@ -57,7 +57,6 @@ from baselines.CLNN_MLP import CLNN_MLP
 from baselines.CLNN_CD_MLP import CLNN_CD_MLP
 from baselines.CLNN_IN import CLNN_IN
 from baselines.IN import IN
-from find_bad_grad import BadGradFinder
 
 seed_everything(0)
 
