@@ -28,8 +28,6 @@ from argparse import ArgumentParser, Namespace
 import os, sys
 import json
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-# PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# sys.path.append(PARENT_DIR)
 from operator import add
 from functools import reduce
 
@@ -46,8 +44,6 @@ from torchdiffeq import odeint
 
 # local application imports
 from datasets.datasets import RigidBodyDataset
-# from systems.chain_pendulum import ChainPendulum
-# from systems.gyroscope import Gyroscope
 from systems.bouncing_mass_points import BouncingMassPoints
 from systems.bouncing_disks import BouncingDisks
 from systems.chain_pendulum_with_contact import ChainPendulumWithContact
@@ -55,7 +51,6 @@ from systems.rope_chain import RopeChain
 from systems.elastic_rope import ElasticRope
 from systems.gyroscope_with_wall import GyroscopeWithWall
 from systems.cloth import Cloth
-# from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
 from models.hamiltonian import CHNNwC
 from baselines.CLNN_MLP import CLNN_MLP

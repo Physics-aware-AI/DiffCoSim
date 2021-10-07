@@ -1,3 +1,7 @@
+"""
+code from lcp-physics https://github.com/locuslab/lcp-physics
+"""
+
 import torch
 import numpy as np
 

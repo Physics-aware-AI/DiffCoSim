@@ -1,4 +1,6 @@
-"""Adapted from qpth: https://github.com/locuslab/qpth
+"""
+code from qpth: https://github.com/locuslab/qpth
+modified to be compatible with PyTorch 1.6
 """
 
 import torch

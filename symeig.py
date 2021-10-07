@@ -1,65 +1,45 @@
 """
-Non-commercial Use License
-
-Copyright (c) 2021 Siemens Technology
-
-This software, along with associated documentation files (the "Software"), is 
-provided for the sole purpose of providing Proof of Concept. Any commercial 
-uses of the Software including, but not limited to, the rights to sublicense, 
-and/or sell copies of the Software are prohibited and are subject to a 
-separate licensing agreement with Siemens. This software may be proprietary 
-to Siemens and may be covered by patent and copyright laws. Processes 
-controlled by the Software are patent pending.
-
-The above copyright notice and this permission notice shall remain attached 
-to the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+code from https://colab.research.google.com/drive/1wyt3357g8J91PQggLh8CLgvm4RiBmjQv
+please see https://github.com/pytorch/pytorch/issues/47599
 """
 
 from torch.autograd import Function
 import torch
 
-class Symeig(Function):
+# class Symeig(Function):
 
-    @staticmethod
-    def forward(ctx, input):
-        lambda_, v = torch.symeig(input, eigenvectors=True, upper=True)
-        ctx.save_for_backward(input, lambda_, v)
-        return lambda_, v
+#     @staticmethod
+#     def forward(ctx, input):
+#         lambda_, v = torch.symeig(input, eigenvectors=True, upper=True)
+#         ctx.save_for_backward(input, lambda_, v)
+#         return lambda_, v
 
-    @staticmethod
-    def backward(ctx, glambda_, gv):
-        # unpack and initializaiton
-        input, lambda_, v = ctx.saved_tensors
-        result = torch.zeros_like(input)
-        #
-        vh = v.conj().transpose(-2, -1)
-        # contribution from the eigenvectors
-        if gv is not None:
-            F = lambda_.unsqueeze(-2) - lambda_.unsqueeze(-1)
-            F.diagonal(0, -2, -1).fill_(float("Inf"))
-            F.pow_(-1)
-            result = v @ ((F * (vh @ gv)) @ vh)
-        else:
-            result = torch.zeros_like(input)
-        # contribution from eigenvalues
-        if glambda_ is not None:
-            glambda_ = glambda_.type_as(input)
-            glambda_term = (v * glambda_.unsqueeze(-2)) @ vh
-            result = result + glambda_term
+#     @staticmethod
+#     def backward(ctx, glambda_, gv):
+#         # unpack and initializaiton
+#         input, lambda_, v = ctx.saved_tensors
+#         result = torch.zeros_like(input)
+#         #
+#         vh = v.conj().transpose(-2, -1)
+#         # contribution from the eigenvectors
+#         if gv is not None:
+#             F = lambda_.unsqueeze(-2) - lambda_.unsqueeze(-1)
+#             F.diagonal(0, -2, -1).fill_(float("Inf"))
+#             F.pow_(-1)
+#             result = v @ ((F * (vh @ gv)) @ vh)
+#         else:
+#             result = torch.zeros_like(input)
+#         # contribution from eigenvalues
+#         if glambda_ is not None:
+#             glambda_ = glambda_.type_as(input)
+#             glambda_term = (v * glambda_.unsqueeze(-2)) @ vh
+#             result = result + glambda_term
 
-        grad_input = result.add(result.conj().transpose(-2, -1)).mul_(0.5)
+#         grad_input = result.add(result.conj().transpose(-2, -1)).mul_(0.5)
 
-        return grad_input
+#         return grad_input
 
-my_symeig = Symeig.apply
+# my_symeig = Symeig.apply
 
 
 class Symeig(Function):

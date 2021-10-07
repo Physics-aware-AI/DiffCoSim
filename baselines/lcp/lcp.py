@@ -1,3 +1,8 @@
+"""
+code from lcp-physics https://github.com/locuslab/lcp-physics
+modified to be compatible with PyTorch 1.6
+"""
+
 import torch
 from torch.autograd import Function
 
