@@ -72,18 +72,6 @@ class Model(pl.LightningModule):
         super().__init__()
         hparams = Namespace(**hparams) if type(hparams) is dict else hparams
         vars(hparams).update(**kwargs)
-        if not hasattr(hparams, "is_mujoco_like"):
-            hparams.is_mujoco_like = False
-        if not hasattr(hparams, "is_base_full"):
-            hparams.is_base_full = False
-        if not hasattr(hparams, "noise_std"):
-            hparams.noise_std = 0.0
-        if not hasattr(hparams, "reg"):
-            hparams.reg = 0.01
-        if not hasattr(hparams, "is_lcp_data"):
-            hparams.is_lcp_data = False
-        if not hasattr(hparams, "is_lcp_model"):
-            hparams.is_lcp_model = False
 
         if hparams.body_kwargs_file == "":
             body = str_to_class(hparams.body_class)()
@@ -332,7 +320,6 @@ class Model(pl.LightningModule):
                             choices=[
                                 "CLNNwC", "CHNNwC", "MLP_CD_CLNN", "IN_CP_SP", "IN_CP_CLNN"
                             ], default="CLNNwC")
-        parser.add_argument("--is-base-full", action="store_true", default=False)
         parser.add_argument("--tol", type=float, default=1e-7)
         parser.add_argument("--solver", type=str, default="rk4")
         parser.add_argument("--reg", type=float, default=0.01)

@@ -105,11 +105,11 @@ class GyroscopeWithWall(RigidBody):
 
     def __str__(self):
         if self.is_mujoco_like:
-            return f"{self.__class__.__name__}{self.kwargs_file_name}_mujoco"
+            return f"{self.__class__.__name__}_{self.kwargs_file_name}_mujoco"
         elif self.is_lcp_data:
-            return f"{self.__class__.__name__}{self.kwargs_file_name}_lcp"
+            return f"{self.__class__.__name__}_{self.kwargs_file_name}_lcp"
         else:
-            return f"{self.__class__.__name__}{self.kwargs_file_name}"
+            return f"{self.__class__.__name__}_{self.kwargs_file_name}"
         # return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, r):
