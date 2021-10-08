@@ -43,7 +43,7 @@ class InteractionNetwork(nn.Module):
         self.D_X = body.d
         self.D_P = body.d
 
-        if "BM" in body.kwargs_file_name:
+        if "BP" in body.kwargs_file_name:
             self.N_O = body.n_o+4
             self.N_R = body.n_o * (body.n_o-1) + 4 * body.n_o
             self.D_A = 2 # inv_mass and ls
@@ -54,7 +54,7 @@ class InteractionNetwork(nn.Module):
                                         [0.5, 0.0],
                                         [1.0, 0.5],
                                         [0.5, 1.0]], device=device, dtype=dtype)
-            self.populate_relation_BM()
+            self.populate_relation_BP()
         elif "BD" in body.kwargs_file_name:
             self.N_O = body.n+4
             self.N_R = body.n_o * (body.n_o-1)  + 4 * body.n_o + 6*body.n_o
@@ -85,7 +85,7 @@ class InteractionNetwork(nn.Module):
             # 1, 3
             self.walls = torch.tensor([[0.0, -1.0, 0.0]], device=device, dtype=dtype)
             self.populate_relation_Gyro()
-        elif "ER" in body.kwargs_file_name:
+        elif "Rope" in body.kwargs_file_name:
             self.N_O = body.n+1
             # angle limit + stretch limit 
             self.N_R = 2*(body.n_o-1)*2 + 2*(body.n_o)*2  
@@ -94,67 +94,14 @@ class InteractionNetwork(nn.Module):
             self.has_ls = True
             # 1, 2
             self.walls = torch.tensor([[0.0, 0.0]], device=device, dtype=dtype)
-            self.populate_relation_ER()
-        elif "Cloth" in body.kwargs_file_name:
-            self.N_O = body.n_o + 1
-            self.N_R = body.n_c * 4
-            self.D_A = 1 # inv_mass 
-            self.D_R = 3 # mu, cor, populateed_ls 
-            self.has_ls = False
-            self.walls = torch.tensor([[0.0, 0.0, 0.0]], device=device, dtype=dtype)
-            self.populate_relation_Cloth()
+            self.populate_relation_Rope()
         else:
             raise NotImplementedError
 
         self.init_model(self.N_O, self.D_S, self.N_R, self.D_R, self.D_X, self.D_A, self.D_P,
                         R_net_hidden_size, O_net_hidden_size)
 
-    def populate_relation_Cloth(self):
-        # R_r: N_R, N_O
-        # R_s: N_R, N_O
-        # R_a: N_R, D_R
-        # ls
-        body = self.body
-        R_r = torch.zeros(self.N_R, self.N_O)
-        R_s = torch.zeros(self.N_R, self.N_O)
-        limit_idx_to_o_idx = self.body.limit_idx_to_o_idx
-        ptr = 0
-        for idx in range(limit_idx_to_o_idx.shape[0]):
-            i = limit_idx_to_o_idx[idx, 0]
-            j = limit_idx_to_o_idx[idx, 1]
-            if idx == 0:
-                R_r[ptr, -1] = 1.0 ; R_s[ptr, 0] = 1.0
-                R_r[ptr+1, -1] = 1.0 ; R_s[ptr, i] = 1.0
-                ptr += 2
-                continue
-            R_r[ptr, i] = 1.0 ; R_s[ptr, j] = 1.0
-            R_r[ptr+1, i] = 1.0 ; R_s[ptr+1, j] = 1.0
-            ptr += 2
-        assert ptr == 2 * self.body.n_c
-        R_r[ptr:] = R_s[:ptr]
-        R_s[ptr:] = R_r[:ptr]
-        
-        self.R_r = R_r
-        self.R_s = R_s
-
-        # the orders are mixed up but since they are homogeneous it is fine. 
-        mus = torch.cat(
-            [body.mus, body.mus, body.mus, body.mus],
-            dim=0
-        )
-        cors = torch.cat(
-            [body.cors, body.cors, body.cors, body.cors],
-            dim=0
-        )
-        ls = torch.cat(
-            [body.populated_ls, body.populated_ls, body.populated_ls, body.populated_ls],
-            dim=0
-        )
-        self.R_a = torch.stack([mus, cors, ls], dim=1) # N_R, D_R=3
-        assert self.R_s.shape == self.R_r.shape == (self.N_R, self.N_O)
-        assert self.R_a.shape == (self.N_R, self.D_R)
-
-    def populate_relation_ER(self):
+    def populate_relation_Rope(self):
         # R_r: N_R, N_O
         # R_s: N_R, N_O
         # R_a: N_R, D_R
@@ -382,7 +329,7 @@ class InteractionNetwork(nn.Module):
         assert self.R_a.shape == (self.N_R, self.D_R)
         assert self.ls.shape[0] == body.n
 
-    def populate_relation_BM(self):
+    def populate_relation_BP(self):
         # R_r: N_R, N_O
         # R_s: N_R, N_O
         # R_a: N_R, D_R

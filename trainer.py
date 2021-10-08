@@ -44,19 +44,16 @@ from torchdiffeq import odeint
 
 # local application imports
 from datasets.datasets import RigidBodyDataset
-from systems.bouncing_mass_points import BouncingMassPoints
+from systems.bouncing_point_masses import BouncingPointMasses
 from systems.bouncing_disks import BouncingDisks
 from systems.chain_pendulum_with_contact import ChainPendulumWithContact
-from systems.rope_chain import RopeChain
-from systems.elastic_rope import ElasticRope
+from systems.rope import ElasticRope
 from systems.gyroscope_with_wall import GyroscopeWithWall
-from systems.cloth import Cloth
 from models.lagrangian import CLNNwC
 from models.hamiltonian import CHNNwC
-from baselines.CLNN_MLP import CLNN_MLP
-from baselines.CLNN_CD_MLP import CLNN_CD_MLP
-from baselines.CLNN_IN import CLNN_IN
-from baselines.IN import IN
+from baselines.MLP_CD_CLNN import MLP_CD_CLNN
+from baselines.IN_CP_CLNN import IN_CP_CLNN
+from baselines.IN_CP_SP import IN_CP_SP
 
 seed_everything(0)
 
@@ -333,7 +330,7 @@ class Model(pl.LightningModule):
         parser.add_argument("--num-layers", type=int, default=3, help="number of hidden layers")
         parser.add_argument("--network-class", type=str, help="dynamical model",
                             choices=[
-                                "CLNNwC", "CHNNwC", "CLNN_MLP", "CLNN_CD_MLP", "CLNN_IN", "IN"
+                                "CLNNwC", "CHNNwC", "MLP_CD_CLNN", "IN_CP_SP", "IN_CP_CLNN"
                             ], default="CLNNwC")
         parser.add_argument("--is-base-full", action="store_true", default=False)
         parser.add_argument("--tol", type=float, default=1e-7)

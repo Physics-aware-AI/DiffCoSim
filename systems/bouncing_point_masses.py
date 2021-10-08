@@ -34,7 +34,7 @@ from models.impulse import ImpulseSolver
 from models.impulse_mujoco import ImpulseSolverMujoco
 from baselines.lcp.impulse_lcp import ImpulseSolverLCP
 
-class BouncingMassPoints(RigidBody):
+class BouncingPointMasses(RigidBody):
     dt = 0.01
     integration_time = 1.0
 
@@ -195,9 +195,9 @@ class BouncingMassPoints(RigidBody):
 
     @property
     def animator(self):
-        return BouncingMassPointsAnimation
+        return BouncingPointMassesAnimation
 
-class BouncingMassPointsAnimation(Animation):
+class BouncingPointMassesAnimation(Animation):
     def __init__(self, qt, body):
         # at: T, n, d
         super().__init__(qt, body)
