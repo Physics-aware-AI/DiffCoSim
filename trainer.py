@@ -79,7 +79,8 @@ class Model(pl.LightningModule):
             with open(os.path.join(THIS_DIR, "examples", hparams.body_kwargs_file+".json"), "r") as file:
                 body_kwargs = json.load(file)
             body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, 
-                                                    is_mujoco_like=hparams.is_mujoco_like, 
+                                                    is_reg_data=hparams.is_reg_data,
+                                                    is_reg_model=hparams.is_reg_model, 
                                                     is_lcp_data=hparams.is_lcp_data,
                                                     is_lcp_model=hparams.is_lcp_model,
                                                     **body_kwargs)
@@ -301,9 +302,9 @@ class Model(pl.LightningModule):
         parser.add_argument("--n-train", type=int, default=800, help="number of train trajectories")
         parser.add_argument("--n-val", type=int, default=100, help="number of validation trajectories")
         parser.add_argument("--n-test", type=int, default=100, help="number of test trajectories")
-        parser.add_argument("--is-mujoco-like", action="store_true", default=False)
-        parser.add_argument("--noise-std", type=float, default=0.0)
+        parser.add_argument("--is-reg-data", action="store_true", default=False)
         parser.add_argument("--is-lcp-data", action="store_true", default=False)
+        parser.add_argument("--noise-std", type=float, default=0.0)
         # optimizer
         parser.add_argument("--chunk-len", type=int, default=5)
         parser.add_argument("--batch-size", type=int, default=1)
@@ -311,19 +312,18 @@ class Model(pl.LightningModule):
         parser.add_argument("--optimizer-class", type=str, default="AdamW")
         parser.add_argument("--weight-decay", type=float, default=1e-4)
         parser.add_argument("--SGDR", action="store_true", default=False)
-        parser.add_argument("--train-separate", action="store_true", default=False) # this argument is deprecated
-        parser.add_argument("--mu-cor-start-epoch", type=int, default=0) # this argument is deprecated
         # model
         parser.add_argument("--hidden-size", type=int, default=256, help="number of hidden units")
         parser.add_argument("--num-layers", type=int, default=3, help="number of hidden layers")
+        parser.add_argument("--tol", type=float, default=1e-7)
+        parser.add_argument("--solver", type=str, default="rk4")
         parser.add_argument("--network-class", type=str, help="dynamical model",
                             choices=[
                                 "CLNNwC", "CHNNwC", "MLP_CD_CLNN", "IN_CP_SP", "IN_CP_CLNN"
                             ], default="CLNNwC")
-        parser.add_argument("--tol", type=float, default=1e-7)
-        parser.add_argument("--solver", type=str, default="rk4")
-        parser.add_argument("--reg", type=float, default=0.01)
         parser.add_argument("--is-lcp-model", action="store_true", default=False)
+        parser.add_argument("--is-reg-model", action="store_true", default=False)
+        parser.add_argument("--reg", type=float, default=0.01)
     
         return parser
 
@@ -335,12 +335,12 @@ if __name__ == "__main__":
     hparams = parser.parse_args()
     model = Model(hparams)
 
-    is_mujoco = "_mujoco" if hparams.is_mujoco_like else ""
-    is_base_full = "_base_full" if hparams.is_base_full else ""
-    noise_std_str = "" if hparams.noise_std < 0.0000001 else f"_{hparams.noise_std}"
+    is_reg_model = "_reg" if hparams.is_reg_model else ""
     is_lcp_model = "_lcp" if hparams.is_lcp_model else ""
+    noise_std_str = "" if hparams.noise_std < 0.0000001 else f"_{hparams.noise_std}"
     savedir = os.path.join(".", "logs", 
-                          hparams.body_kwargs_file + is_mujoco + f"_{hparams.network_class}" + is_base_full + is_lcp_model + f"_N{hparams.n_train}" + noise_std_str)
+                          hparams.body_kwargs_file + f"_{hparams.network_class}" 
+                          + is_reg_model + is_lcp_model + f"_N{hparams.n_train}" + noise_std_str)
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=savedir, name='')
 
     checkpoint = ModelCheckpoint(monitor="val/loss",
@@ -353,11 +353,6 @@ if __name__ == "__main__":
                                          deterministic=True,
                                          callbacks=[checkpoint],
                                          logger=[tb_logger],
-                                        #  profiler="simple",
-                                        #  max_epochs=1
                                         )
 
     trainer.fit(model)
-
-    # with torch.no_grad():
-    #     trainer.test()

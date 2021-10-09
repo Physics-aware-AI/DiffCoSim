@@ -35,7 +35,7 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-class ImpulseSolver(nn.Module):
+class ContactModel(nn.Module):
     def __init__(
         self, dt, n_o, n_p, d, 
         check_collision, cld_2did_to_1did, DPhi,  

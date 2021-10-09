@@ -5,13 +5,13 @@ https://github.com/mfinzi/constrained-hamiltonian-neural-networks
 
 from systems.rigid_body import RigidBody, BodyGraph
 from utils import Animation, com_euler_to_bodyX, bodyX_to_com_euler
-from models.impulse import ImpulseSolver
 from pytorch_lightning import seed_everything
 import numpy as np
 import torch
 import networkx as nx
-from models.impulse_mujoco import ImpulseSolverMujoco
-from baselines.lcp.impulse_lcp import ImpulseSolverLCP
+from models.contact_model import ContactModel
+from models.contact_model_reg import ContactModelReg
+from baselines.lcp.contact_model_lcp import ContactModelLCP
 
 class GyroscopeWithWall(RigidBody):
     dt = 0.02
@@ -31,12 +31,13 @@ class GyroscopeWithWall(RigidBody):
         is_homo=True,
         offset=0.0,
         radius=0.3,
-        is_mujoco_like=False,
+        is_reg_data=False,
+        is_reg_model=False,
         is_lcp_model=False,
         is_lcp_data=False,
         dtype=torch.float64
     ):
-        assert not (is_mujoco_like and is_lcp_model)
+        assert not (is_reg_model and is_lcp_model)
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.m = m
@@ -52,7 +53,8 @@ class GyroscopeWithWall(RigidBody):
         self.mus = torch.tensor(mus, dtype=torch.float64)
         self.cors = torch.tensor(cors, dtype=torch.float64)
         self.is_homo = is_homo
-        self.is_mujoco_like = is_mujoco_like
+        self.is_reg_data = is_reg_data
+        self.is_reg_model = is_reg_model
         self.is_lcp_model = is_lcp_model
         self.is_lcp_data = is_lcp_data
 
@@ -61,7 +63,7 @@ class GyroscopeWithWall(RigidBody):
         self.radius = radius
 
         if is_lcp_model:
-            self.impulse_solver = ImpulseSolverLCP(
+            self.impulse_solver = ContactModelLCP(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -74,8 +76,8 @@ class GyroscopeWithWall(RigidBody):
                 delta=self.delta,
                 get_3d_contact_point_c_tilde=self.get_3d_contact_point_c_tilde
             )
-        elif is_mujoco_like:
-            self.impulse_solver = ImpulseSolverMujoco(
+        elif is_reg_model:
+            self.impulse_solver = ContactModelReg(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -89,7 +91,7 @@ class GyroscopeWithWall(RigidBody):
                 get_3d_contact_point_c_tilde=self.get_3d_contact_point_c_tilde
             )
         else:
-            self.impulse_solver = ImpulseSolver(
+            self.impulse_solver = ContactModel(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -104,13 +106,12 @@ class GyroscopeWithWall(RigidBody):
             )
 
     def __str__(self):
-        if self.is_mujoco_like:
-            return f"{self.__class__.__name__}_{self.kwargs_file_name}_mujoco"
+        if self.is_reg_data:
+            return f"{self.__class__.__name__}_{self.kwargs_file_name}_reg"
         elif self.is_lcp_data:
             return f"{self.__class__.__name__}_{self.kwargs_file_name}_lcp"
         else:
             return f"{self.__class__.__name__}_{self.kwargs_file_name}"
-        # return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, r):
         M = self.M.to(dtype=r.dtype)

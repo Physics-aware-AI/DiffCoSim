@@ -18,6 +18,7 @@ class CHNNwC(nn.Module):
         num_layers: int = 3, 
         device: torch.device = torch.device('cpu'),
         dtype: torch.dtype = torch.float32, 
+        reg=0.01,
         **kwargs
     ):
         super().__init__()
@@ -46,6 +47,14 @@ class CHNNwC(nn.Module):
             self.mu_params = nn.Parameter(torch.rand(n_c, dtype=dtype))
             self.cor_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
         self.is_homo = is_homo
+
+        if impulse_solver.__class__.__name__ == "ContactModelReg":
+            if reg < 0:
+                # override the reg with a learnable parameter
+                self.reg = nn.Parameter(torch.randn(1, dtype=dtype))
+                impulse_solver.reg = self.reg
+            else:
+                impulse_solver.reg = reg
 
         self.impulse_solver = impulse_solver
 

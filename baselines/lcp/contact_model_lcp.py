@@ -38,7 +38,7 @@ PARENT_PARENT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.absp
 from .lcp import LCPFunction
 lcp_solver = LCPFunction.apply
 
-class ImpulseSolverLCP(nn.Module):
+class ContactModelLCP(nn.Module):
     def __init__(
         self, dt, n_o, n_p, d, 
         check_collision, cld_2did_to_1did, DPhi,  

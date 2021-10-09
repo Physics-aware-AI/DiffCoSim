@@ -52,7 +52,7 @@ class CLNNwC(nn.Module):
             self.cor_params = nn.Parameter(torch.randn(n_c, dtype=dtype))
         self.is_homo = is_homo
 
-        if impulse_solver.__class__.__name__ == "ImpulseSolverMujoco":
+        if impulse_solver.__class__.__name__ == "ContactModelReg":
             if reg < 0:
                 # override the reg with a learnable parameter
                 self.reg = nn.Parameter(torch.randn(1, dtype=dtype))

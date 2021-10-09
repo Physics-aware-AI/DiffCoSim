@@ -32,8 +32,9 @@ import networkx as nx
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
 import matplotlib.pyplot as plt
-from models.impulse import ImpulseSolver
-from models.impulse_mujoco import ImpulseSolverMujoco
+from models.contact_model import ContactModel
+from models.contact_model_reg import ContactModelReg
+from baselines.lcp.contact_model_lcp import ContactModelLCP
 
 PI = 3.1415927410125732
 
@@ -57,9 +58,7 @@ class Rope(RigidBody):
         max_stretch=1.2,
         spring_k = 50,
         is_homo=True,
-        is_mujoco_like=False,
-        is_lcp_data=False,
-        is_lcp_model=False,
+        is_reg_model=False,
         dtype=torch.float64
     ):
         assert is_homo and n_o >= 2
@@ -80,7 +79,7 @@ class Rope(RigidBody):
         self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
         self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
         self.is_homo = is_homo
-        self.is_mujoco_like = is_mujoco_like
+        self.is_reg_model = is_reg_model
         
         self.body_graph = BodyGraph()
         # self.body_graph.add_extended_body(0, ms[0], d=0, tether=(torch.zeros(2), ls[0]))
@@ -90,8 +89,8 @@ class Rope(RigidBody):
         for i in range(0, n_o):
             self.body_graph.add_extended_body(i, ms[0], d=0)
 
-        if not is_mujoco_like:
-            self.impulse_solver = ImpulseSolver(
+        if not is_reg_model:
+            self.impulse_solver = ContactModel(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -104,7 +103,7 @@ class Rope(RigidBody):
                 get_limit_e_for_Jac=self.get_limit_e_for_Jac
             )      
         else:
-            self.impulse_solver = ImpulseSolverMujoco(
+            self.impulse_solver = ContactModelReg(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -119,11 +118,10 @@ class Rope(RigidBody):
 
 
     def __str__(self):
-        if self.is_mujoco_like:
-            return f"{self.__class__.__name__}_{self.kwargs_file_name}_mujoco"
+        if self.is_reg_data:
+            return f"{self.__class__.__name__}_{self.kwargs_file_name}_reg"
         else:
             return f"{self.__class__.__name__}_{self.kwargs_file_name}"
-        # return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, x):
         # x: (bs, n, d)
@@ -207,19 +205,6 @@ class Rope(RigidBody):
         diff = torch.cat([x[..., 0:1, :], diff], dim=-2) # (*bsT, n, 2)
         ls = (diff**2).sum(-1).sqrt()
         return ls
-
-    # def check_boundary_collision(self, x):
-    #     coef = self.bdry_lin_coef / (self.bdry_lin_coef[:, 0:1] ** 2 + 
-    #                 self.bdry_lin_coef[:, 1:2] ** 2).sqrt() # n_bdry, 3
-    #     x_one = torch.cat(
-    #         [x, torch.ones(*x.shape[:-1], 1, dtype=x.dtype, device=x.device)],
-    #         dim=-1
-    #     ).unsqueeze(-2) # bs, n, 1, 3
-    #     dist = (x_one * coef).sum(-1) # bs, n, n_bdry
-    #     dist_bdry = dist - self.radii[:, None]
-    #     is_collide_bdry = dist_bdry < 0 # bs, n, n_bdry
-    #     is_collide = is_collide_bdry.sum([1, 2]) > 0
-    #     return is_collide, is_collide_bdry, dist_bdry
 
     def cld_2did_to_1did(self, cld_ij_ids, cld_bdry_ids, cld_limit_ids):
         return cld_limit_ids[:,0]

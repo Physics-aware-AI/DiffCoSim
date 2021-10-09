@@ -44,24 +44,13 @@ from pytorch_lightning import loggers as pl_loggers
 from torchdiffeq import odeint
 
 # local application imports
-# from datasets.datasets import RigidBodyDataset
-# from systems.chain_pendulum import ChainPendulum
-# from systems.gyroscope import Gyroscope
-# from systems.bouncing_mass_points import BouncingMassPoints
 from systems.bouncing_disks import BouncingDisks
-# from systems.chain_pendulum_with_contact import ChainPendulumWithContact
-# from systems.rope_chain import RopeChain
-# from systems.elastic_rope import ElasticRope
-# from systems.gyroscope_with_wall import GyroscopeWithWall
-# from models.hamiltonian import CHNN, HNN_Struct, HNN_Struct_Angle, HNN, HNN_Angle
 from models.lagrangian import CLNNwC
 from models.hamiltonian import CHNNwC
 from models.dynamics import ConstrainedLagrangianDynamics
-from baselines.CLNN_MLP import CLNN_MLP
-from baselines.CLNN_CD_MLP import CLNN_CD_MLP
-from baselines.CLNN_IN import CLNN_IN
-from baselines.IN import IN
-from find_bad_grad import BadGradFinder
+# from baselines.MLP_CD_CLNN import MLP_CD_CLNN
+# from baselines.IN_CP_CLNN import IN_CP_CLNN
+# from baselines.IN_CP_SP import IN_CP_SP
 
 from utils import dummy_dataloader
 from trainer import Model as Dynamics_pl_model
@@ -83,18 +72,6 @@ class Model(pl.LightningModule):
         super().__init__()
         hparams = Namespace(**hparams) if type(hparams) is dict else hparams
         vars(hparams).update(**kwargs)
-        if not hasattr(hparams, "is_mujoco_like"):
-            hparams.is_mujoco_like = False
-        if not hasattr(hparams, "is_base_full"):
-            hparams.is_base_full = False
-        if not hasattr(hparams, "noise_std"):
-            hparams.noise_std = 0.0
-        if not hasattr(hparams, "reg"):
-            hparams.reg = 0.01
-        if not hasattr(hparams, "is_lcp_data"):
-            hparams.is_lcp_data = False
-        if not hasattr(hparams, "is_lcp_model"):
-            hparams.is_lcp_model = False
 
         if hparams.body_kwargs_file == "":
             body = str_to_class(hparams.body_class)()
@@ -102,9 +79,10 @@ class Model(pl.LightningModule):
             with open(os.path.join(THIS_DIR, "examples", hparams.body_kwargs_file+".json"), "r") as file:
                 body_kwargs = json.load(file)
             body = str_to_class(hparams.body_class)(hparams.body_kwargs_file, 
-                                                    is_mujoco_like=hparams.is_mujoco_like, 
-                                                    is_lcp_data=hparams.is_lcp_data,
-                                                    is_lcp_model=hparams.is_lcp_model,
+                                                    is_reg_data=False,
+                                                    is_reg_model=False, 
+                                                    is_lcp_data=False,
+                                                    is_lcp_model=False,
                                                     **body_kwargs)
             vars(hparams).update(**body_kwargs)
         vars(hparams).update(
@@ -114,13 +92,6 @@ class Model(pl.LightningModule):
             body=body
         )
 
-        # self.model = str_to_class(hparams.network_class)(body_graph=body.body_graph, 
-        #                                                  impulse_solver=body.impulse_solver,
-        #                                                  d=body.d,
-        #                                                  n_c=body.n_c,
-        #                                                  device=self.device,
-        #                                                  dtype=self.dtype,
-        #                                                  **vars(hparams))
         ##### target
         self.register_buffer("target_xy", torch.tensor(hparams.target_xy))
         # initial condition and time step
@@ -312,8 +283,6 @@ class Model(pl.LightningModule):
         parser.add_argument("--body-class", type=str, default="BouncingDisks")
         parser.add_argument("--body-kwargs-file", type=str, default="BD1_homo_cor0.8_mu0.2")
         parser.add_argument("--dataset-class", type=str, default="RigidBodyDataset")
-        parser.add_argument("--is-mujoco-like", action="store_true", default=False)
-        parser.add_argument("--is-lcp-data", action="store_true", default=False)
         # optimizer
         parser.add_argument("--lr", type=float, default=1e-1, help="learning rate")
         parser.add_argument("--optimizer-class", type=str, default="AdamW")
@@ -323,7 +292,6 @@ class Model(pl.LightningModule):
         parser.set_defaults(SGDR=True)
         # model
         parser.add_argument("--solver", type=str, default="rk4")
-        # parser.add_argument("--learned-model-path", type=str, default="")
     
         return parser
 
@@ -335,11 +303,12 @@ if __name__ == "__main__":
     hparams = parser.parse_args()
     model = Model(hparams)
 
-    is_mujoco = "_mujoco" if hparams.is_mujoco_like else ""
+    is_reg_model = "_reg" if hparams.is_reg_model else ""
     is_lcp_model = "_lcp" if hparams.is_lcp_model else ""
     is_learned_model = "_learned" if hparams.ckpt_path else ""
     savedir = os.path.join(".", "logs", 
-                          hparams.task + "_" + hparams.body_kwargs_file + is_mujoco + is_lcp_model)
+                          hparams.task + "_" + hparams.body_kwargs_file 
+                          + is_reg_model + is_lcp_model + is_learned_model)
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=savedir, name='')
 
     checkpoint = ModelCheckpoint(monitor="val/loss",
@@ -355,6 +324,3 @@ if __name__ == "__main__":
                                          logger=[tb_logger])
 
     trainer.fit(model)
-
-    # with torch.no_grad():
-    #     trainer.test()

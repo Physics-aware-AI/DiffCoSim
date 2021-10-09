@@ -31,13 +31,13 @@ import cvxpy as cp
 from cvxpylayers.torch import CvxpyLayer
 from diffcp.cone_program import SolverError
 # from symeig import symeig
-from .impulse import ImpulseSolver
+from .contact_model import ContactModel
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PARENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-class ImpulseSolverMujoco(ImpulseSolver):
+class ContactModelReg(ContactModel):
     def __init__(
         self, dt, n_o, n_p, d, 
         check_collision, cld_2did_to_1did, DPhi,  

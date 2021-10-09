@@ -11,9 +11,9 @@ import torch
 import networkx as nx
 from matplotlib import collections as mc
 from matplotlib.patches import Circle
-from models.impulse import ImpulseSolver
-from models.impulse_mujoco import ImpulseSolverMujoco
-from baselines.lcp.impulse_lcp import ImpulseSolverLCP
+from models.contact_model import ContactModel
+from models.contact_model_reg import ContactModelReg
+from baselines.lcp.contact_model_lcp import ContactModelLCP
 
 class ChainPendulumWithContact(RigidBody):
     dt = 0.01
@@ -31,14 +31,15 @@ class ChainPendulumWithContact(RigidBody):
         cors=[1.0, 1.0, 1.0, 1.0], 
         bdry_lin_coef=[[0, 1, 1]],
         is_homo=True,
-        is_mujoco_like=False,
+        is_reg_data=False,
+        is_reg_model=False,
         is_lcp_data=False,
         is_lcp_model=False,
         dtype=torch.float64
     ):
         assert n_o == len(ms) == len(ls) == len(radii)
         assert is_homo
-        assert not (is_mujoco_like and is_lcp_model)
+        assert not (is_reg_model and is_lcp_model)
         self.body_graph = BodyGraph()
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms, dtype=dtype)
@@ -58,12 +59,13 @@ class ChainPendulumWithContact(RigidBody):
         self.mus = torch.tensor(mus*self.n_c, dtype=torch.float64)
         self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
         self.is_homo = is_homo
-        self.is_mujoco_like = is_mujoco_like
+        self.is_reg_model = is_reg_model
+        self.is_reg_data = is_reg_data
         self.is_lcp_model = is_lcp_model
         self.is_lcp_data = is_lcp_data
 
         if is_lcp_model:
-            self.impulse_solver = ImpulseSolverLCP(
+            self.impulse_solver = ContactModelLCP(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -74,8 +76,8 @@ class ChainPendulumWithContact(RigidBody):
                 cld_2did_to_1did = self.cld_2did_to_1did,
                 DPhi = self.DPhi
             )     
-        elif is_mujoco_like:
-            self.impulse_solver = ImpulseSolverMujoco(
+        elif is_reg_model:
+            self.impulse_solver = ContactModelReg(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -87,7 +89,7 @@ class ChainPendulumWithContact(RigidBody):
                 DPhi = self.DPhi
             )   
         else:
-            self.impulse_solver = ImpulseSolver(
+            self.impulse_solver = ContactModel(
                 dt = self.dt,
                 n_o = self.n_o,
                 n_p = self.n_p,
@@ -100,13 +102,12 @@ class ChainPendulumWithContact(RigidBody):
             )   
 
     def __str__(self):
-        if self.is_mujoco_like:
-            return f"{self.__class__.__name__}_{self.kwargs_file_name}_mujoco"
+        if self.is_reg_data:
+            return f"{self.__class__.__name__}_{self.kwargs_file_name}_reg"
         elif self.is_lcp_data:
             return f"{self.__class__.__name__}_{self.kwargs_file_name}_lcp"
         else:
             return f"{self.__class__.__name__}_{self.kwargs_file_name}"
-        # return f"{self.__class__.__name__}{self.kwargs_file_name}"
 
     def potential(self, x):
         M = self.M.to(dtype=x.dtype)
