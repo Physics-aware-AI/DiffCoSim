@@ -12,7 +12,6 @@ from systems.rigid_body import EuclideanT, GeneralizedT, rigid_DPhi
 from .hamiltonian import HNN_Struct
 from torchdiffeq import odeint
 from typing import Optional, Union, Tuple
-from models.impulse import ImpulseSolver
 
 class CLNNwC(nn.Module):
     def __init__(self, body_graph, impulse_solver, n_c, d, 

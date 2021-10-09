@@ -28,7 +28,7 @@ import torch
 import os
 from pytorch_lightning import seed_everything
 
-from systems.bouncing_mass_points import BouncingMassPoints
+from systems.bouncing_point_masses import BouncingPointMasses
 def rel_err(x, y):
     return (((x - y) ** 2).sum() / ((x + y) ** 2).sum()).sqrt()
 
@@ -36,7 +36,7 @@ class RigidBodyDataset(Dataset):
     def __init__(
         self, 
         root_dir=os.path.dirname(os.path.abspath(__file__)),
-        body=BouncingMassPoints(),
+        body=BouncingPointMasses(),
         n_traj=100,
         mode="train", 
         dtype=torch.float32,

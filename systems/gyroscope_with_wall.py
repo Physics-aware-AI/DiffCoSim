@@ -173,7 +173,7 @@ class GyroscopeWithWall(RigidBody):
         dist = (mesh_points_one * bdry_lin_coef).sum(-1) # (bs, 20, 1, 1) # n_o, n_bdry
         min_dist, min_dist_idx = torch.min(dist, dim=1) # (bs, 1, 1), (bs, 1, 1)
         is_cld_bdry = min_dist < 0
-        cld_angles = angles[min_dist_idx.squeeze()] # (bs, )
+        cld_angles = angles[min_dist_idx.squeeze(-1).squeeze(-1)] # (bs, )
         c = torch.stack(
             [self.radius*cld_angles.cos(), self.radius*cld_angles.sin(), self.offset*torch.ones_like(cld_angles)],
             dim=-1

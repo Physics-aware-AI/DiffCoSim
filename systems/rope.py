@@ -58,10 +58,14 @@ class Rope(RigidBody):
         max_stretch=1.2,
         spring_k = 50,
         is_homo=True,
+        is_reg_data=False,
         is_reg_model=False,
+        is_lcp_data=False,
+        is_lcp_model=False,
         dtype=torch.float64
     ):
         assert is_homo and n_o >= 2
+        assert is_lcp_data == False and is_lcp_model == False
         self.kwargs_file_name = kwargs_file_name
         self.ms = torch.tensor(ms*n_o, dtype=dtype)
         self.ls = torch.tensor(ls*n_o, dtype=dtype)
@@ -80,6 +84,7 @@ class Rope(RigidBody):
         self.cors = torch.tensor(cors*self.n_c, dtype=torch.float64)
         self.is_homo = is_homo
         self.is_reg_model = is_reg_model
+        self.is_reg_data = is_reg_data
         
         self.body_graph = BodyGraph()
         # self.body_graph.add_extended_body(0, ms[0], d=0, tether=(torch.zeros(2), ls[0]))

@@ -47,7 +47,7 @@ from datasets.datasets import RigidBodyDataset
 from systems.bouncing_point_masses import BouncingPointMasses
 from systems.bouncing_disks import BouncingDisks
 from systems.chain_pendulum_with_contact import ChainPendulumWithContact
-from systems.rope import ElasticRope
+from systems.rope import Rope
 from systems.gyroscope_with_wall import GyroscopeWithWall
 from models.lagrangian import CLNNwC
 from models.hamiltonian import CHNNwC
@@ -296,7 +296,7 @@ class Model(pl.LightningModule):
     def add_model_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         # dataset 
-        parser.add_argument("--body-class", type=str, default="BouncingMassPoints")
+        parser.add_argument("--body-class", type=str, default="BouncingPointMasses")
         parser.add_argument("--body-kwargs-file", type=str, default="default")
         parser.add_argument("--dataset-class", type=str, default="RigidBodyDataset")
         parser.add_argument("--n-train", type=int, default=800, help="number of train trajectories")
