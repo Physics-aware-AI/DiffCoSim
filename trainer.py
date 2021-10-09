@@ -323,6 +323,7 @@ class Model(pl.LightningModule):
                             ], default="CLNNwC")
         parser.add_argument("--is-lcp-model", action="store_true", default=False)
         parser.add_argument("--is-reg-model", action="store_true", default=False)
+        # set a negative reg to enable a learnable regularizer, as suggested by a reviewer
         parser.add_argument("--reg", type=float, default=0.01)
     
         return parser
