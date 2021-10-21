@@ -307,7 +307,7 @@ class Model(pl.LightningModule):
         parser.add_argument("--noise-std", type=float, default=0.0)
         # optimizer
         parser.add_argument("--chunk-len", type=int, default=5)
-        parser.add_argument("--batch-size", type=int, default=1)
+        parser.add_argument("--batch-size", type=int, default=200)
         parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
         parser.add_argument("--optimizer-class", type=str, default="AdamW")
         parser.add_argument("--weight-decay", type=float, default=1e-4)

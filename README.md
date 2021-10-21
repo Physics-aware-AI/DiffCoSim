@@ -14,14 +14,24 @@ Yaofeng Desmond Zhong, Biswadip Dey, Amit Chakraborty | 2021
 
 This repository is the official implementation of [Extending Lagrangian and Hamiltonian Neural Networks with Differentiable Contact Models](https://arxiv.org/abs/2102.06794). 
 
-You are in the archive branch. This branch is the original implementation that produces the results and figures in the paper. However, the system names in the code is different from the system names in the paper. 
+__WIP__: We are preparing the release of dataset, pre-trained models and analysis notebooks. In the meantime, you can run the following commands to run the dynamics and parameter tasks in the paper. The commands will generate the dataset first and then start training. (Note that it might take a while to generate the dataset.)
 
-You might want to check out the following notebooks, which produces the figures in the paper. 
-
-- [plot.ipynb](./analysis/plot.ipynb)
-- [plot_sample_efficiency.ipynb](./analysis/plot_sample_efficiency.ipynb)
-- [plot_billiards.ipynb](./analysis/plot_billiards.ipynb)
-- [mass_ratio.ipynb](./analysis/mass_ratio.ipynb)
-- [analyze_lcp.ipynb](./analysis/analyze_lcp.ipynb)
-- [analyze_rope_extra.ipynb](./analysis/analyze_rope_extra.ipynb)
-- [rope_statistics.ipynb](./rope_analysis/rope_statistics.ipynb)
+```python
+# train CM-CD-CLNN models
+# BP5-e
+python trainer.py --body-class BouncingPointMasses --body-kwargs-file _BP5-e 
+# BP5
+python trainer.py --body-class BouncingPointMasses --body-kwargs-file _BP5 
+# BD5
+python trainer.py --body-class BouncingDisks --body-kwargs-file _BD5 
+# CP3-e
+python trainer.py --body-class ChainPendulumWithContact --body-kwargs-file _CP3-e 
+# CP3
+python trainer.py --body-class ChainPendulumWithContact --body-kwargs-file _CP3
+# Rope 
+python trainer.py --body-class Rope --body-kwargs-file _Rope 
+# Gyro-e
+python trainer.py --body-class GyroscopeWithWall --body-kwargs-file _Gyro-e 
+# Gyro
+python trainer.py --body-class GyroscopeWithWall --body-kwargs-file _Gyro 
+```
