@@ -232,7 +232,7 @@ class BouncingDisks(RigidBody):
 
     @property
     def animator(self):
-        if self._animator is None:
+        if not hasattr(self, "_animator"):
             self._animator = BouncingDisksAnimation
         return self._animator
     

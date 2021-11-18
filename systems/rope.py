@@ -301,7 +301,7 @@ class RopeAnimation(Animation):
         # self.ax.set_xlim(-0.1, 0.53)
         # self.ax.set_ylim(-0.2, 0.47)
         self.ax.set_xlim(-5, 5)
-        self.ax.set_ylim(-5, 5)
+        self.ax.set_ylim(-4.5, 5.5)
         self.ax.axis("off"),
         self.fig.set_size_inches(10.5, 10.5)
 
