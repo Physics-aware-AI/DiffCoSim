@@ -99,7 +99,7 @@ class IN_CP_SP(CLNNwC):
                 dim=-1
             )
             return f_external
-        elif "ER" in self.body.kwargs_file_name:
+        elif "Rope" in self.body.kwargs_file_name:
             g = self.body.g
             # inv_moments = torch.div(1, self.body.ms)
             f_external = torch.stack(

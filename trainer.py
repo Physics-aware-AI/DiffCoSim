@@ -165,7 +165,7 @@ class Model(pl.LightningModule):
         # z0: (bs, 2, n, d), zts: (bs, T, 2, n, d), ts: (bs, T)
         (z0, ts), zts, is_clds = batch
 
-        if self.hparams.network_class != "CLNNwC" and self.hparams.network_class != "CHNNwC" and not self.hparams.is_base_full:
+        if self.hparams.network_class != "CLNNwC" and self.hparams.network_class != "CHNNwC":
             # reshape data to predict only one step forward for ablation study
             bs, T, _, n, d = zts.shape
             z0 = zts[:, :-1].reshape(bs*(T-1), 2, n, d)
