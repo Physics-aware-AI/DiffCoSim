@@ -188,7 +188,7 @@ class Model(pl.LightningModule):
             Minv = self.Minv 
             dynamics = self.dynamics
         ##### Initial conditions are learnable
-        if self.hparams.task == "vertical":
+        if self.hparams.task == "vertical_nospin":
             self.initial_velocity = torch.cat([self.initial_vxvy, self.initial_w])
         z0 = self.get_z0(self.initial_position, self.initial_velocity)
         ##### integration
@@ -208,7 +208,7 @@ class Model(pl.LightningModule):
             vy.append(zt.reshape(1, 2, 1, 3, 2)[0, 1, 0, 0, 1]) 
             status.append(status[-1]+1 if vy[-1]*vy[-2] < 0 or vy[-1] == 0 else status[-1])
         # calculate the loss model.hparams.task
-        if self.hparams.task == "vertical" or self.hparams.task == "vertical_nospin":
+        if self.hparams.task == "vertical_nospin":
             # get those in zT such that status == 1
             for i in range(len(status)):
                 if status[i] == 1:
@@ -273,7 +273,7 @@ class Model(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument("--task", type=str, default="hit")
+        parser.add_argument("--task", type=str, default="hit", choices=["hit", "vertical_nospin"])
         parser.add_argument("--initial-position", type=float, nargs=3, default=[0.25, 0.65, 0.0])
         parser.add_argument("--target-xy", type=float, nargs=2, default=[0.75, 0.1])
         parser.add_argument("--initial-vxvy", type=float, nargs=2, default=[0.6, 0.4])
@@ -303,12 +303,12 @@ if __name__ == "__main__":
     hparams = parser.parse_args()
     model = Model(hparams)
 
-    is_reg_model = "_reg" if hparams.is_reg_model else ""
-    is_lcp_model = "_lcp" if hparams.is_lcp_model else ""
     is_learned_model = "_learned" if hparams.ckpt_path else ""
-    savedir = os.path.join(".", "logs", 
-                          hparams.task + "_" + hparams.body_kwargs_file 
-                          + is_reg_model + is_lcp_model + is_learned_model)
+    savedir = os.path.join(
+        ".", 
+        "logs", 
+        hparams.task + "_" + hparams.body_kwargs_file + is_learned_model
+    )
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=savedir, name='')
 
     checkpoint = ModelCheckpoint(monitor="val/loss",
