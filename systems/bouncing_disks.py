@@ -319,7 +319,7 @@ class ThrowAnimation(BouncingDisksAnimation):
             )
             self.ax.add_artist(target_circle)
         # this part is coded based on qt
-        if task == "vertical":
+        if task == "vertical_nospin":
             for t in range(qt.shape[0]):
                 y = self.qt[t, 0, 1] 
                 if y < 0.5 and y > self.qt[t-1, 0, 1]:
