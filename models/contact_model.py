@@ -314,7 +314,7 @@ class ContactModel(nn.Module):
                     A_decom, Jac_v, mu, n_cld, d
                 )
             except SolverError as e:
-                self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
+                # self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
                 impulse = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after compression phase (before retitution phase)
         M_hat_inv = L_V_s @ L_V_s.t() #(n*d, n*d)
@@ -334,7 +334,7 @@ class ContactModel(nn.Module):
                     A_decom, Jac_v_prev_r, v_star_c, mu, n_cld, d, target_impulse=target_impulse
                 )
             except SolverError as e:
-                self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
+                # self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor, DPhi)
                 impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after restitution phase, compensate penetration
         dv_rest = (M_hat_inv_Jac_T @ impulse_star_r).reshape(n, d)
@@ -403,7 +403,7 @@ class ContactModel(nn.Module):
                     A_decom, Jac_v, mu, n_cld, d
                 )
             except SolverError as e:
-                self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+                # self.save(e, "comp", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
                 impulse = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after compression phase (before retitution phase)
         Minv_Jac_T = (Minv @ Jac.reshape(n_cld*d, n*d).t().reshape(n, d*n_cld*d)).reshape(n*d, n_cld*d)
@@ -422,7 +422,7 @@ class ContactModel(nn.Module):
                     A_decom, Jac_v_prev_r, v_star_c, mu, n_cld, d, target_impulse=target_impulse
                 )
             except:
-                self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
+                # self.save(e, "rest", bs_idx, v, Minv, Jac, Jac_v, v_star, mu, cor)
                 impulse_star_r = torch.zeros(n_cld*d, 1).type_as(v)
         # velocity after restitution phase
         dv_rest = (Minv_Jac_T @ impulse_star_r).reshape(n, d)

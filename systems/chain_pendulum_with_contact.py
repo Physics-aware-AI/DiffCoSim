@@ -220,12 +220,6 @@ class Pendulum_w_Wall_Animation(Animation):
         self.n_o = body.n_o
         self.n_p = body.n_p
 
-        # x_min, x_max = self.ax.get_xlim()
-        # y_min, y_max = self.ax.get_ylim()
-        # x_min = x_min if x_min < -body.lb-0.1 else -body.lb-0.1
-        # x_max = x_max if x_max > body.rb+0.1 else body.rb+0.1
-        # self.ax.set_xlim(x_min, x_max)
-
         x_min, y_min, x_max, y_max = -1.1, -1.1, 1.1, 1.1
         self.ax.set_xlim(x_min, x_max)
         self.ax.set_ylim(y_min, y_max)
@@ -248,7 +242,6 @@ class Pendulum_w_Wall_Animation(Animation):
             lines = [[(x_min, -1), (x_max, -1)]]
         else:
             lines = [[(-1, y_min), (-1, y_max)], [(1, y_min), (1, y_max)]]
-        # lines = [[(-body.lb, y_min), (-body.lb, y_max)], [(body.rb, y_min), (body.rb, y_max)]]
         lc = mc.LineCollection(lines, linewidths=4, color="k")
         self.ax.add_collection(lc)
 

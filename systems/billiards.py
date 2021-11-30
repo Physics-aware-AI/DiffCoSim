@@ -205,7 +205,6 @@ class BilliardsAnimation(Animation):
         if d!=3: self.ax.set_aspect("equal")
 
         empty = d * [[]]
-        # self.colors = np.random.choice([f"C{i}" for i in range(15)], size=n, replace=False)
         self.colors = [f"C{i}" for i in range(15)]
         self.objects = {
             'pts': sum([self.ax.plot(*empty, ms=6, color=self.colors[i]) for i in range(n)], [])
@@ -218,14 +217,11 @@ class BilliardsAnimation(Animation):
         self.ax.set_xlim(0.0, 1.0)
         self.ax.set_ylim(0.0, 1.0)
         self.ax.axis("off"),
-        # self.ax.set_facecolor('green')
         self.fig.set_size_inches(10.5, 10.5)
         self.fig.patch.set_facecolor('#3C733F')
 
         empty = self.qt.shape[-1] * [[]]
-        # self.objects["pts"] = sum(
-        #     [self.ax.plot(*empty, c=self.colors[i]) for i in range(0, qt.shape[1])], []
-        # )
+
         self.circles = [Circle([[0], [0]], body.ls[0], color='#CCCCCC', lw=None)] + \
             [Circle([[0], [0]], body.ls[i], color='#F20530', lw=None) for i in range(1, qt.shape[1]-1)] + \
             [Circle([[0], [0]], body.ls[-1], color="#3344cc", lw=None)] + \
@@ -238,19 +234,7 @@ class BilliardsAnimation(Animation):
         T, n, d = self.qt.shape
         for j in range(n):
             self.circles[j].center = self.qt[i, j][0], self.qt[i, j][1]
-        # qt = self.qt.reshape(T, self.n_o, self.n_p, d)
-        # for j in range(self.n_o):
-        #     # draw trails
-        #     xyz = qt[i: i+1, j, 0, :]
-        #     # draw points
-        #     self.objects['pts'][j].set_data(*xyz[-1:,...,:2].T)
-        #     if d==3: self.objects['pts'][j].set_3d_properties(xyz[-1:,...,2].T)
-        # return sum(self.objects.values(), []) 
         return self.circles
-
-    # def animate(self):
-    #     return animation.FuncAnimation(self.fig, self.update, frames=self.qt.shape[0],
-    #                 interval=64, init_func=self.init, blit=True,)#.save("test.gif")#.to_html5_video()
 
 
 class BilliardsDummyAnimation(BilliardsAnimation):

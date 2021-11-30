@@ -234,7 +234,6 @@ class GyroscopeAnimation(Animation):
         # plot the cone
         self.cone = [self.ax.plot_surface(xx, yy, zz, zorder=1)]
 
-
         # plot the lines
         # self.objects['lines'] = sum([self.ax.plot([],[],[],"-",c="k") for _ in range(4)], [])
         self.objects["lines"] = sum([self.ax.plot([], [], [], "-", c="k", zorder=5) for _ in range(2)], [])
@@ -260,15 +259,6 @@ class GyroscopeAnimation(Animation):
         self.objects['lines'][0].set_3d_properties(np.array([p0[2],p1[2]]))
         self.objects['lines'][1].set_data(np.array([p0[0], p2[0]]), np.array([p0[1],p2[1]]))
         self.objects['lines'][1].set_3d_properties(np.array([p0[2],p2[2]]))
-
-        
-        # x, y, z = self.qt[i,0].T
-        # self.objects['lines'][0].set_data(np.array([0,x]), np.array([0,y]))
-        # self.objects['lines'][0].set_3d_properties(np.array([0,z]))
-        # for j in range(1,4):
-        #     self.objects['lines'][j].set_data(*self.qt[i, (0, j)].T[:2])
-        #     self.objects['lines'][j].set_3d_properties(self.qt[i, (0, j)].T[2])
-
         # plot cone
         self.cone[0].remove()
         step = 40
