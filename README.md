@@ -6,7 +6,7 @@
 
 Yaofeng Desmond Zhong, Biswadip Dey, Amit Chakraborty | 2021
 
-[![Conference](http://img.shields.io/badge/NeurIPS-2021-4b44ce.svg)](https://arxiv.org/abs/2102.06794)
+[![Conference](http://img.shields.io/badge/NeurIPS-2021-4b44ce.svg)](https://proceedings.neurips.cc/paper/2021/file/b7a8486459730bea9569414ef76cf03f-Paper.pdf)
 [![Paper](http://img.shields.io/badge/arXiv-2102.06794-B31B1B.svg)](https://arxiv.org/abs/2102.06794)
 
 
